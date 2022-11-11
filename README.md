@@ -21,7 +21,7 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
 
 How to run h2spec:
 
-1. Start server with "sbtIO/run"<br>
+1. Start server with "sbt IO/run"<br>
 2. ./h2spec http2 -h localhost -p 8443 -t -k<br>
 
 You should get:<br>
