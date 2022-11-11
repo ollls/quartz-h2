@@ -12,7 +12,7 @@ http2 spec compatibility tests:
 https://formulae.brew.sh/formula/h2spec
 
 
-100% asyncronous Java NIO based implementation of http/2 packet streaming with TLS emcryption iplemented as scala CATS effect.
+100% asyncronous Java NIO based implementation of http/2 packet streaming with TLS emcryption implemented as scala CATS effect.
 Solution was tested and optimized to produce highest possible TPS.
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.
 
