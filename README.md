@@ -18,3 +18,13 @@ It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and 
 
 Http/2 weights and dependecy are not implemented, for performance reasons. 
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fibers.
+
+How to run h2spec:
+
+1. Start server with "sbtIO/run"<br>
+2. ./h2spec http2 -h localhost -p 8443 -t -k<br>
+
+You should get:<br>
+Finished in 3.7611 seconds<br>
+94 tests, 92 passed, 1 skipped, 1 failed<br>
+
