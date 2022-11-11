@@ -11,8 +11,6 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  sbt RIO/run<br>
 
 
-* test: h2load -t1 -D10 -c4 -m10 https://localhost:8443/hello
-
 * performance test tool:
 https://nghttp2.org/documentation/h2load-howto.html<br>
 http2 spec compatibility tests:
