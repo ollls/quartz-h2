@@ -28,3 +28,17 @@ You should get:<br>
 Finished in 3.7611 seconds<br>
 94 tests, 92 passed, 1 skipped, 1 failed<br>
 
+
+h2load -D10  -c33 -m20 https://localhost:8443
+
+
+finished in 10.00s, 9650.20 req/s, 198.08KB/s
+requests: 96502 total, 97162 started, 96502 done, 96502 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 96502 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 1.93MB (2028324) total, 94.24KB (96502) headers (space savings 90.00%), 188.48KB (193004) data
+                     min         max         mean         sd        +/- sd
+time for request:      441us    148.17ms     67.35ms     16.30ms    68.20%
+time for connect:    92.07ms    235.75ms    113.97ms     37.18ms    90.91%
+time to 1st byte:   104.51ms    344.04ms    179.90ms     63.82ms    66.67%
+req/s           :     283.96      303.56      292.41        4.05    78.79%
+
