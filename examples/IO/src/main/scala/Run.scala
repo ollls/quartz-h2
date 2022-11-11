@@ -16,7 +16,10 @@ object MyApp extends IOApp {
 
   val ROOT_CATALOG = "/Users/ostrygun/web_root"
 
-  val R : HttpRouteIO = { case GET -> Root / "hello" => IO( Response.Ok() ) }
+  val R : HttpRouteIO = { 
+    case GET -> Root => IO( Response.Ok().asText("OK")) 
+    //case GET -> Root / "test" => IO( Response.Ok()) 
+  }
 
 
   /*
