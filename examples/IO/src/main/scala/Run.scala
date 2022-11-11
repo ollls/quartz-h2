@@ -17,7 +17,9 @@ object MyApp extends IOApp {
   val ROOT_CATALOG = "/Users/ostrygun/web_root"
 
   val R : HttpRouteIO = { 
+    //best path for h2spec
     case GET -> Root => IO( Response.Ok().asText("OK")) 
+    //uncomment this line for perf tests
     //case GET -> Root / "test" => IO( Response.Ok()) 
   }
 
