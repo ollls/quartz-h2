@@ -1,4 +1,4 @@
-100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS emcryption implemented as scala CATS effect.
+100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Solution was tested and optimized to produce highest possible TPS.
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.<br>
 Http/2 weights and dependecy are not implemented, for performance reasons. 
