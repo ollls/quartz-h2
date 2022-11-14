@@ -44,6 +44,8 @@ time for connect:    28.15ms     35.16ms     31.76ms      2.32ms    62.50%
 time to 1st byte:    35.93ms     38.28ms     36.77ms       641us    75.00%
 req/s           :    5425.98     5497.17     5458.79       21.32    75.00%
 ```
+Please, refer to for use cases.
+quartz-h2/examples/
 
 ```scala
 
