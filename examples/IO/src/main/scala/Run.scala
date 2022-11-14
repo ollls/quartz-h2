@@ -7,6 +7,7 @@ import io.quartz.http2.model.{Headers, Method, ContentType, Request, Response}
 import io.quartz.http2.model.Method._
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
+import fs2.{Stream, Chunk}
 
 //import cats.data.Kleisli, cats.implicits._
 
@@ -20,10 +21,14 @@ object MyApp extends IOApp {
     //best path for h2spec
     case GET -> Root => IO( Response.Ok().asText("OK")) 
     //uncomment this line for perf tests
-    //case GET -> Root / "test" => IO( Response.Ok()) 
+    
+    case GET -> Root / "example" =>
+      //how to send data in separate H2 packets of various size. 
+      val ts = Stream.emits( "Block1\n".getBytes())
+      val ts2 = ts ++ Stream.emits( "Block22\n".getBytes())
+      IO( Response.Ok().asStream( ts2 ) )
+
   }
-
-
   /*
   def routes[Env](e: Env) = {
     val R = Routes.of(e) {  //env and RIO

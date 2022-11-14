@@ -55,6 +55,7 @@ object Http2Connection {
   ): IO[Boolean] = {
     for {
       bb <- outq.take
+      //_ <- Logger[IO].trace( "packet is about to send")
       res <- if (bb == null) IO(true) else IO(false)
       _ <- ch.write(bb).whenA(res == false)
       _ <- Logger[IO].debug("Shutdown outbound H2 packet sender").whenA(res == true)
@@ -842,6 +843,7 @@ class Http2Connection(
     for {
       t <- IO(Http2Connection.parseFrame(bb))
       len = t._1
+      _ <- Logger[IO].trace( s"data frame - len =$len")
       opt_D <- IO(streamTbl.get(streamId))
       _ <- opt_D match {
         case Some(ce) =>
