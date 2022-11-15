@@ -9,7 +9,7 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  * how to run examples:
  sbt publishLocal<br>
  sbt IO/run<br>
- sbt RIO/run<br>
+ sbt RIO/run<br> ReaderT for environment with Route DSL
 
 
 * performance test tool:
