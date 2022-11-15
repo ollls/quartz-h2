@@ -46,6 +46,8 @@ req/s           :    5425.98     5497.17     5458.79       21.32    75.00%
 ```
 Please, refer to for use cases.
 quartz-h2/examples/
+Route DSL is the same as for zio-tls-http, please refer to that project.
+You can easily stream any big file in and out ( GET/POST) with fs2 stream. 
 
 ```scala
 
