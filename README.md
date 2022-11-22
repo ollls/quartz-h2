@@ -9,7 +9,7 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  * how to run examples:
  sbt publishLocal<br>
  sbt IO/run<br>
- sbt RIO/run<br>
+ sbt RIO/run ReaderT for environment with Route DSL
 
 
 * performance test tool:
@@ -44,4 +44,31 @@ time for connect:    28.15ms     35.16ms     31.76ms      2.32ms    62.50%
 time to 1st byte:    35.93ms     38.28ms     36.77ms       641us    75.00%
 req/s           :    5425.98     5497.17     5458.79       21.32    75.00%
 ```
+Please, refer to for use cases.
+quartz-h2/examples/
+Route DSL is the same as for zio-tls-http, <br>
+You can easily stream any big file in and out ( GET/POST) with fs2 stream. 
 
+```scala
+
+val R : HttpRouteIO = { 
+
+    case GET -> Root => IO( Response.Ok().asText("OK")) 
+    
+    case GET -> Root / "example" =>
+      //how to send data in separate H2 packets of various size. 
+      val ts = Stream.emits( "Block1\n".getBytes())
+      val ts2 = ts ++ Stream.emits( "Block22\n".getBytes())
+      IO( Response.Ok().asStream( ts2 ) )
+
+  }
+
+  def run(args: List[String]): IO[ExitCode] =
+    for {
+      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      exitCode <- new QuartzH2Server("localhost", 8443, 60000, ctx).startIO( R )
+
+    } yield (exitCode)
+
+}
+```
