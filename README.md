@@ -17,6 +17,12 @@ https://nghttp2.org/documentation/h2load-howto.html<br>
 http2 spec compatibility tests:
 https://formulae.brew.sh/formula/h2spec
 
+* Now it's possible to switch TCP sockets between JAVA-NIO and Java Socket Api ( on blocking pool ).
+Look at https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
+'''scala
+  exitCode <- new QuartzH2Server("localhost", 8443, 60000, ctx).startIO( R, sync = false)
+'''scala
+
 
 How to run h2spec:
 
