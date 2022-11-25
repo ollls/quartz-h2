@@ -9,8 +9,6 @@ import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
 
-//import cats.data.Kleisli, cats.implicits._
-
 object MyApp extends IOApp {
 
   val text = "Hello World!"
@@ -36,11 +34,11 @@ object MyApp extends IOApp {
       val BLOCK_SIZE = 16000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-        jstream <- IO.blocking(new java.io.FileInputStream( jpath ) )
-      } yield ( Response
-              .Ok()
-              .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
-              .contentType(ContentType.contentTypeFromFileName(FILE)) )
+        jstream <- IO.blocking(new java.io.FileInputStream(jpath))
+      } yield (Response
+        .Ok()
+        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+        .contentType(ContentType.contentTypeFromFileName(FILE)))
 
   }
 
