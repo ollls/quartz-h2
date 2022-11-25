@@ -81,3 +81,25 @@ val R : HttpRouteIO = {
 
 }
 ```
+
+
+Simple file retrieval.
+
+```scala
+
+case GET -> Root / "pic" =>
+      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val FILE = "IMG_0278.jpeg"
+      val BLOCK_SIZE = 16000
+      for {
+        jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
+        jstream <- IO.blocking(new java.io.FileInputStream( jpath ) )
+      } yield ( Response
+              .Ok()
+              .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+              .contentType(ContentType.contentTypeFromFileName(FILE)) )
+
+```
+
+
+
