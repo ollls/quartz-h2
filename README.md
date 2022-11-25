@@ -3,6 +3,9 @@ Solution was tested and optimized to produce highest possible TPS.
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.<br>
 Http/2 weights and dependecy are not implemented, for performance reasons. 
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
+
+ * Use cases:
+ https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
  
  * how to change debug level: edit logback-test.xml, run sbt publishLocal
  
