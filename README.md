@@ -3,6 +3,9 @@ Solution was tested and optimized to produce highest possible TPS.
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.<br>
 Http/2 weights and dependecy are not implemented, for performance reasons. 
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
+
+ * Use cases:
+ https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
  
  * how to change debug level: edit logback-test.xml, run sbt publishLocal
  
@@ -81,3 +84,25 @@ val R : HttpRouteIO = {
 
 }
 ```
+
+
+Simple file retrieval.
+
+```scala
+
+case GET -> Root / "pic" =>
+      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val FILE = "IMG_0278.jpeg"
+      val BLOCK_SIZE = 16000
+      for {
+        jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
+        jstream <- IO.blocking(new java.io.FileInputStream( jpath ) )
+      } yield ( Response
+              .Ok()
+              .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+              .contentType(ContentType.contentTypeFromFileName(FILE)) )
+
+```
+
+
+
