@@ -11,10 +11,6 @@ import fs2.{Stream, Chunk}
 
 object MyApp extends IOApp {
 
-  val text = "Hello World!"
-
-  val ROOT_CATALOG = "/Users/yourusername/web_root"
-
   val R: HttpRouteIO = {
     // best path for h2spec
     case GET -> Root => IO(Response.Ok().asText("OK"))
@@ -40,6 +36,20 @@ object MyApp extends IOApp {
         .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
         .contentType(ContentType.contentTypeFromFileName(FILE)))
 
+    //your web site files in the folder "web" under web_root.    
+    //browser path: https://localhost:8443/web/index.html
+    case req @ GET -> "web" /: _ =>
+      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val BLOCK_SIZE = 16000
+      for {
+        reqPath <- IO(req.uri.getPath())
+        jpath <- IO(new java.io.File(FOLDER_PATH + reqPath))
+        jstream <- IO.blocking(new java.io.FileInputStream(jpath))
+        fname <- IO(jpath.getName())
+      } yield (Response
+        .Ok()
+        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+        .contentType(ContentType.contentTypeFromFileName(fname)))
   }
 
   def run(args: List[String]): IO[ExitCode] =
