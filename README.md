@@ -91,7 +91,7 @@ Simple file retrieval.
 ```scala
 
 case GET -> Root / "pic" =>
-      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val FOLDER_PATH = "/Users/user000/web_root/"
       val FILE = "IMG_0278.jpeg"
       val BLOCK_SIZE = 16000
       for {
