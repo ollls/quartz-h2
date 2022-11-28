@@ -55,7 +55,7 @@ object Http2Connection {
   ): IO[Boolean] = {
     for {
       bb <- outq.take
-      //_ <- Logger[IO].trace( "packet is about to send")
+      // _ <- Logger[IO].trace( "packet is about to send")
       res <- if (bb == null) IO(true) else IO(false)
       _ <- ch.write(bb).whenA(res == false)
       _ <- Logger[IO].debug("Shutdown outbound H2 packet sender").whenA(res == true)
@@ -619,11 +619,9 @@ class Http2Connection(
 
   }
 
-  private[this] def processInboundGlobalFlowControl(dataSize: Int) = {
+  private[this] def processInboundGlobalFlowControl( streamId: Int, dataSize: Int) = {
     for {
       win_sz <- this.globalInboundWindow.get
-
-      // _ <- IO.println("INBOUND_WINDOW = " + win_sz)
 
       pending_sz <- this.globalBytesOfPendingInboundData.get
 
@@ -632,12 +630,11 @@ class Http2Connection(
       _ <-
         if ((win_sz - dataSize) < WINDOW * 0.3) { // less then 30% space available, time for WINDOW_UPDATE
           val updWin = WINDOW - pending_sz // check if server cannot keep up with data
-          if (updWin > WINDOW * 0.6) { // updWind should be big enough at least 60%, otherwise let's wait
+          println( "updWin = " + updWin )
+          if (updWin > WINDOW * 0.4) { // updWind should be big enough at least 40%, otherwise let's wait
             this.globalInboundWindow.update(_ + updWin) >> // we decided to update - increase window
-              IO.println("Send WINDOW UPDATE global = " + updWin) >>
-              sendFrame(
-                Frames.mkWindowUpdateFrame(0, updWin)
-              ) /* TBD send update window to remore peer*/ // tell remote about it
+              Logger[IO].trace("Send WINDOW UPDATE global = " + updWin) >> sendFrame(
+                Frames.mkWindowUpdateFrame(0, updWin) ) >> sendFrame( Frames.mkWindowUpdateFrame( streamId, updWin) )
           } else IO.unit
         } else IO.unit
     } yield ()
@@ -685,7 +682,7 @@ class Http2Connection(
             _ - dataSize
           ) >> c.bytesOfPendingInboundData.update(_ + dataSize)
         else
-          processInboundGlobalFlowControl(dataSize) >>
+          processInboundGlobalFlowControl( streamId, dataSize) >>
             this.globalInboundWindow.update(_ - dataSize) >>
             this.incrementGlobalPendingInboundData(dataSize)
 
