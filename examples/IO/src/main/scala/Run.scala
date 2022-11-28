@@ -8,10 +8,20 @@ import io.quartz.http2.model.Method._
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
+import  fs2.io.file.{Files, Path}
 
 object MyApp extends IOApp {
 
   val R: HttpRouteIO = {
+
+    case req@POST -> Root / "upload" /  StringVar(_) => 
+      for {
+        reqPath <- IO( Path( "/Users/ostrygun/" + req.uri.getPath() ))
+        u <- req.stream.through( Files[IO].writeAll( reqPath ) ).compile.drain
+        //u <- req.stream.chunks.foreach( c => IO.println( c.size )).compile.drain
+
+      } yield( Response.Ok().asText("OK"))
+
     // best path for h2spec
     case GET -> Root => IO(Response.Ok().asText("OK"))
 
@@ -38,7 +48,7 @@ object MyApp extends IOApp {
 
     //your web site files in the folder "web" under web_root.    
     //browser path: https://localhost:8443/web/index.html
-    case req @ GET -> "web" /: _ =>
+    case req @ GET -> "site" /: _ =>
       val FOLDER_PATH = "/Users/ostrygun/web_root/"
       val BLOCK_SIZE = 16000
       for {
@@ -55,7 +65,7 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 60000, ctx).startIO(R, sync = false)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, sync = false)
 
     } yield (exitCode)
 
