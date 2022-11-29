@@ -125,6 +125,19 @@ Web site service.
   }
   
   ```
+  
+  Upload example (POST https://localhost:8443/upload/op.jpeg).
+  mkdir /Users/user000/upload
+  
+  ```scala
+  
+   case req@POST -> Root / "upload" /  StringVar(_) => 
+      for {
+        reqPath <- IO( Path( "/Users/user000/" + req.uri.getPath() ))
+        u <- req.stream.through( Files[IO].writeAll( reqPath ) ).compile.drain
+      } yield( Response.Ok().asText("OK"))
+
+  ```
 
 
 
