@@ -363,7 +363,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
   def run0(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
-      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 ( async - Java NIO")
+      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 (async - Java NIO)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"Fast mode (stream priority switched off): ${Http2Connection.FAST_MODE}")
       _ <- Logger[IO].info(s"H2 Idle Timeout: $keepAliveMs Ms")
@@ -397,15 +397,6 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     } yield (ExitCode.Success)
   }
 
-  /*
-    def doConnect(
-      ch: IOChannel,
-      maxStreams: Int,
-      keepAliveMs: Int,
-      route: Request => IO[Option[Response]],
-      leftOver: Chunk[Byte] = Chunk.empty[Byte]
-  )
-   */
 
   def run1( e : ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
@@ -432,10 +423,6 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         )
         .flatMap(c => IO(new SocketChannel(c)))
         .flatTap(c => Logger[IO].info(s"Connect from remote peer: ${c.socket.getInetAddress().toString()}"))
-
-      // accept = Logger[IO].debug("Wait on accept") >> SocketChannel
-      //  .accept(server_ch)
-      //  .flatTap(c => Logger[IO].info(s"Connect from remote peer: ${c.socket.getInetAddress().toString()}"))
       _ <- accept
         .flatMap(ch =>
           (IO(ch)
@@ -448,37 +435,4 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     } yield (ExitCode.Success)
   }
 
-  /*
-  def run_async(args: List[String]): IO[ExitCode] = {
-    for {
-      addr <- IO(new InetSocketAddress(HOST, PORT))
-      _ <- Logger[IO].info("HTTP/2 TCP Service")
-      _ <- Logger[IO].info(s"Fast mode: ${Http2Connection.FAST_MODE}")
-      _ <- Logger[IO].info(
-        s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}"
-      )
-      group <- IO(
-        AsynchronousChannelGroup.withThreadPool(Executors.newFixedThreadPool(4))
-      )
-      server_ch <- IO(
-        group.provider().openAsynchronousServerSocketChannel(group).bind(addr)
-      )
-      accept = Logger[IO].debug("Wait on accept") >> TCPChannel
-        .accept(server_ch)
-        .flatTap(c =>
-          Logger[IO].info(
-            s"Connect from remote peer: ${hostName(c.ch.getRemoteAddress())}"
-          )
-        )
-      _ <- accept
-        .flatMap(ch =>
-          (IO(ch)
-            .bracket(ch => doConnect(ch, 30, 20000, R))(ch => ch.close())
-            .handleErrorWith(e => { errorHandler(e) })
-            .start)
-        )
-        .foreverM
-
-    } yield (ExitCode.Success)
-  }*/
 }

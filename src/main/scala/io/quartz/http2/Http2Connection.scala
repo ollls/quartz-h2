@@ -151,6 +151,19 @@ object Http2Connection {
       _ <- c.decrementGlobalPendingInboundData(len)
       // local counter
       _ <- c.updateStreamWith(0, streamId, c => c.bytesOfPendingInboundData.update(_ - len))
+      WINDOW <- IO(c.settings.INITIAL_WINDOW_SIZE)
+      pending_sz <- c.globalBytesOfPendingInboundData.get
+      updWin = if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW
+      _ <-
+        if (updWin > WINDOW * 0.7) {
+          Logger[IO].trace("Send WINDOW UPDATE local on processing incoming data = " + updWin) >> c.sendFrame(
+            Frames.mkWindowUpdateFrame(streamId, if (updWin > 0) updWin else WINDOW)
+          )
+        } else {
+          Logger[IO].trace(
+            ">>>>>>>>>>>>>>>>>>>>>>>>>> still processing incoming data, pause remote, pending data = " + pending_sz
+          ) >> IO.unit
+        }
 
     } yield (bb)
   }
@@ -244,7 +257,7 @@ class Http2Connection(
     outq: Dequeue[IO, ByteBuffer],
     outDataQEventQ: Queue[IO, Boolean],
     globalTransmitWindow: Ref[IO, Long],
-    globalBytesOfPendingInboundData: Ref[IO, Int], // metric
+    val globalBytesOfPendingInboundData: Ref[IO, Int], // metric
     globalInboundWindow: Ref[IO, Int],
     shutdownD: Deferred[IO, Boolean],
     hSem: Semaphore[IO],
@@ -619,7 +632,7 @@ class Http2Connection(
 
   }
 
-  private[this] def processInboundGlobalFlowControl( streamId: Int, dataSize: Int) = {
+  private[this] def processInboundGlobalFlowControl(streamId: Int, dataSize: Int) = {
     for {
       win_sz <- this.globalInboundWindow.get
 
@@ -629,14 +642,12 @@ class Http2Connection(
 
       _ <-
         if ((win_sz - dataSize) < WINDOW * 0.3) { // less then 30% space available, time for WINDOW_UPDATE
-          var updWin = WINDOW - pending_sz// check if server cannot keep up with data
-          if ( updWin <= 0 ) updWin = WINDOW
-          println( "updWin = " + updWin )
-          //if (updWin > WINDOW * 0.4) { // updWind should be big enough at least 40%, otherwise let's wait
-            this.globalInboundWindow.update(_ + updWin) >> // we decided to update - increase window
-              Logger[IO].trace("Send WINDOW UPDATE global = " + updWin) >> sendFrame(
-                Frames.mkWindowUpdateFrame(0, updWin) ) >> sendFrame( Frames.mkWindowUpdateFrame( streamId, updWin) )
-          //} else IO.unit
+          val updWin =
+            if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW // check if server cannot keep up with data
+          this.globalInboundWindow.update(_ + updWin) >> // we decided to update - increase window
+            Logger[IO].trace("Send WINDOW UPDATE global = " + updWin) >> sendFrame(
+              Frames.mkWindowUpdateFrame(0, updWin)
+            )
         } else IO.unit
     } yield ()
   }
@@ -683,7 +694,7 @@ class Http2Connection(
             _ - dataSize
           ) >> c.bytesOfPendingInboundData.update(_ + dataSize)
         else
-          processInboundGlobalFlowControl( streamId, dataSize) >>
+          processInboundGlobalFlowControl(streamId, dataSize) >>
             this.globalInboundWindow.update(_ - dataSize) >>
             this.incrementGlobalPendingInboundData(dataSize)
 
@@ -841,7 +852,7 @@ class Http2Connection(
     for {
       t <- IO(Http2Connection.parseFrame(bb))
       len = t._1
-      _ <- Logger[IO].trace( s"data frame - len =$len")
+      _ <- Logger[IO].trace(s"sendDataFrame() - $len bytes")
       opt_D <- IO(streamTbl.get(streamId))
       _ <- opt_D match {
         case Some(ce) =>
@@ -897,9 +908,9 @@ class Http2Connection(
       response_o <- (httpRoute(request)).handleErrorWith {
         case e: java.io.FileNotFoundException =>
           Logger[IO].error(e.toString) >> IO(None)
-        case e => 
+        case e =>
           Logger[IO].error(e.toString) >>
-             IO(Some(Response.Error(StatusCode.InternalServerError)))
+            IO(Some(Response.Error(StatusCode.InternalServerError)))
       }
 
       _ <- response_o match {
