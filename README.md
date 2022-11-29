@@ -1,6 +1,7 @@
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Direct native translation of fs2 stream chunks into http2 packets ( inbound and outbound ).<br>
-Solution was tested and optimized to produce highest possible TPS.
+
+*Tested and optimized to produce highest possible TPS.
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.<br>
 Http/2 weights and dependecy are not implemented, for performance reasons. 
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
