@@ -126,7 +126,7 @@ Web site service.
   
   ```
   
-  Upload example (POST https://localhost:8443/upload/op.jpeg).
+  Upload example (POST https://localhost:8443/upload/op.jpeg).<br>
   mkdir /Users/user000/upload
   
   ```scala
