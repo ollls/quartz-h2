@@ -643,11 +643,12 @@ class Http2Connection(
       _ <-
         if ((win_sz - dataSize) < WINDOW * 0.3) { // less then 30% space available, time for WINDOW_UPDATE
           val updWin =
-            if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW // check if server cannot keep up with data
-          this.globalInboundWindow.update(_ + updWin) >> // we decided to update - increase window
-            Logger[IO].trace("Send WINDOW UPDATE global = " + updWin) >> sendFrame(
-              Frames.mkWindowUpdateFrame(0, updWin)
-            )
+            if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW
+          this.globalInboundWindow.update(_ + updWin) >> Logger[IO].trace(
+            "Send WINDOW UPDATE global = " + updWin
+          ) >> sendFrame(
+            Frames.mkWindowUpdateFrame(0, updWin)
+          )
         } else IO.unit
     } yield ()
   }
