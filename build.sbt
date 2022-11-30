@@ -11,7 +11,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "quartz-h2",
     libraryDependencies += scalaTest % Test,
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.2",
+    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.3.11",
     libraryDependencies += "org.typelevel" %% "log4cats-slf4j" % "2.4.0", // Direct Slf4j Support - Recommended
     libraryDependencies += "co.fs2" %% "fs2-core" % "3.2.7",
     libraryDependencies += "co.fs2" %% "fs2-io" % "3.2.7",
@@ -24,14 +24,14 @@ lazy val root = (project in file("."))
   lazy val RIO = (project in file("examples/RIO"))
   .settings(
     name := "example",
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.2",
+    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.3.11",
     libraryDependencies += "io.quartz" %% "quartz-h2" % "0.2.0-SNAPSHOT"
   )
 
     lazy val IO = (project in file("examples/IO"))
   .settings(
     name := "example",
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.2",
+    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.3.11",
     libraryDependencies += "io.quartz" %% "quartz-h2" % "0.2.0-SNAPSHOT"
   )
 
