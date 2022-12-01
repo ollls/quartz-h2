@@ -337,26 +337,29 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
   }
 
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
-    val fjj = new ForkJoinWorkerThreadFactory {
-      val num = new AtomicInteger();
-      def newThread(pool: ForkJoinPool) = {
-        val thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
-        thread.setDaemon(true);
-        thread.setName("qh2-pool" + "-" + num.getAndIncrement());
-        thread;
-      }
-    }
+
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
-    val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
-    val ec = ExecutionContext.fromExecutor(e)
+
     if (sync == false) {
+      val fjj = new ForkJoinWorkerThreadFactory {
+        val num = new AtomicInteger();
+        def newThread(pool: ForkJoinPool) = {
+          val thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
+          thread.setDaemon(true);
+          thread.setName("qh2-pool" + "-" + num.getAndIncrement());
+          thread;
+        }
+      }
+      val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
+      val ec = ExecutionContext.fromExecutor(e)
+
       run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
     } else {
-      //Loom test commented out, just FYI
-      //val e = Executors.newVirtualThreadPerTaskExecutor()
-      //val ec = ExecutionContext.fromExecutor(e)
-      run1(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      // Loom test commented out, just FYI
+      // val e = Executors.newVirtualThreadPerTaskExecutor()
+      // val ec = ExecutionContext.fromExecutor(e)
+      run1(R, cores, h2streams, h2IdleTimeOutMs)
     }
   }
 
@@ -397,8 +400,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     } yield (ExitCode.Success)
   }
 
-
-  def run1( e : ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+  def run1(R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
       _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 ( sync - Java Socket )")
@@ -411,7 +413,8 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         sslCtx.getServerSocketFactory().createServerSocket(PORT, 0, addr.getAddress()).asInstanceOf[SSLServerSocket]
       )
 
-      accept = IO(server_ch.accept().asInstanceOf[SSLSocket])
+      accept = IO
+        .blocking(server_ch.accept().asInstanceOf[SSLSocket])
         .flatTap(c =>
           IO {
             c.setUseClientMode(false);

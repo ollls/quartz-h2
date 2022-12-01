@@ -27,7 +27,7 @@ import concurrent.duration.DurationInt
 
 import java.nio.charset.StandardCharsets
 
-import scala.collection.JavaConverters.mapAsScalaConcurrentMapConverter
+import scala.jdk.CollectionConverters.MapHasAsScala
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._

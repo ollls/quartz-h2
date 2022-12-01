@@ -35,4 +35,11 @@ lazy val root = (project in file("."))
     libraryDependencies += "io.quartz" %% "quartz-h2" % "0.2.0-SNAPSHOT"
   )
 
+  scalacOptions ++= Seq(
+  //"-Wunused:imports",
+  //"-Xfatal-warnings",
+  "-deprecation", 
+  "-feature",
+)
+
 // See https://www.scala-sbt.org/1.x/docs/Using-Sonatype.html for instructions on how to publish to Sonatype.

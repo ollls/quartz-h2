@@ -10,8 +10,6 @@ import cats.effect.Resource
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteRIO
 
-//import cats.data.Kleisli, cats.implicits._
-
 object MyApp extends IOApp {
 
   val text = "Hello World!"

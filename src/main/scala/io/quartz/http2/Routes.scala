@@ -23,9 +23,10 @@ object RIO {
   def lift[T, Env](eval: => T): RIO[Env, T] = {
     ReaderT.liftF(IO(eval))
   }
+  /*
   object implicits {
     implicit def lift[T, Env](eval: => T): RIO[Env, T] = RIO.lift(eval)
-  }
+  } */
 }
 
 object Routes {
