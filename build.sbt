@@ -16,8 +16,8 @@ lazy val root = (project in file("."))
     libraryDependencies += "co.fs2" %% "fs2-core" % "3.2.7",
     libraryDependencies += "co.fs2" %% "fs2-io" % "3.2.7",
     libraryDependencies += "com.twitter" % "hpack" % "1.0.2",
-    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3",
-    libraryDependencies += "org.slf4j" % "slf4j-api" % "1.7.5"
+    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.3.5",
+    libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.4"
   )
 
 
