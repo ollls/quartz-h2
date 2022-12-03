@@ -19,9 +19,13 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  * how to change debug level: edit logback-test.xml, run sbt publishLocal
  
  * how to run examples:<br>
- sbt publishLocal<br>
- sbt IO/run<br>
- sbt RIO/run ReaderT for environment with Route DSL
+
+```
+ sbt publishLocal
+ sbt IO/run
+ or
+ sbt RIO/run with ReaderT based routes.
+ ```
 
 
 * performance test tool:
