@@ -50,18 +50,14 @@ lazy val root = (project in file("."))
   )
 
 
-  lazy val RIO = (project in file("examples/RIO"))
+  lazy val RIO = (project in file("examples/RIO")).dependsOn(root)
   .settings(
     name := "example",
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.3.11",
-    libraryDependencies += "io.github.ollls" %% "quartz-h2" % "0.2.0"
   )
 
-    lazy val IO = (project in file("examples/IO"))
+    lazy val IO = (project in file("examples/IO")).dependsOn(root)
   .settings(
     name := "example",
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.3.11",
-    libraryDependencies += "io.github.ollls" %% "quartz-h2" % "0.2.0"
   )
 
   scalacOptions ++= Seq(
