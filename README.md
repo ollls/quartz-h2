@@ -21,10 +21,11 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  * how to run examples:<br>
 
 ```
- ~~ sbt publishLocal~~ ( not neccessary now )
+ sbt publishLocal( not neccessary now )
  sbt IO/run
  or
  sbt RIO/run with ReaderT based routes.
+ 
  ```
 
 
