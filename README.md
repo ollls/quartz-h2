@@ -14,7 +14,7 @@ Http/2 weights and dependecy are not implemented, for performance reasons.
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
 
 **IO async bindings are comimg soon for Java 11 HTTP client API (implements HTTP/2 and Web Socket!**<br>
-**Recommended JSON parser: https://github.com/plokhotnyuk/jsoniter-scala"
+**Recommended JSON parser: https://github.com/plokhotnyuk/jsoniter-scala**<br>
 
  * Use cases:
  https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
