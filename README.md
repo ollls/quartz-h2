@@ -19,7 +19,7 @@ Goal was to reach the highest possible throughtput with 10-20 multiple highly pa
  * Use cases:
  https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
  
- * how to change debug level: edit logback-test.xml, run sbt publishLocal
+ * to change debug level: edit logback-test.xml<br>
  
  * how to run examples:<br>
 
