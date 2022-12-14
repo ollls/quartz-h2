@@ -30,12 +30,6 @@ object RIO {
 }
 
 object Routes {
-  // route where environment needs to be provided later to generate regular HttpRoute
-  //def of[Env](pf: HttpRouteRIO[Env]): HttpRouteRIO[Env] = {
-  //  pf
-  //}
-
-  
   //route withot environment, gives direct HttpRoute
   def of[Env](pf: HttpRouteIO): HttpRoute = {
     val T1: Request => IO[Option[Response]] = (request: Request) =>
@@ -45,15 +39,4 @@ object Routes {
       }
     T1
   }
-
-  /*
-  //route with immediately provided envronment, gives ready to use HttpRoute
-  def of[Env](env: Env)(pf: PartialFunction[Request, RIO[Env, Response]]): HttpRoute = {
-    val T1: Request => ReaderT[IO, Env, Option[Response]] = (request: Request) =>
-      pf.lift(request) match {
-        case Some(c) => c.flatMap(r => ReaderT.liftF(IO(Option(r))))
-        case None    => ReaderT.liftF(IO(None))
-      }
-    (request: Request) => T1(request).run(env)
-  }*/
 }
