@@ -8,19 +8,19 @@ import io.quartz.http2.model.Method._
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
-import  fs2.io.file.{Files, Path}
+import fs2.io.file.{Files, Path}
 
 object MyApp extends IOApp {
 
   val R: HttpRouteIO = {
 
-    case req@POST -> Root / "upload" /  StringVar(_) => 
+    case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
-        reqPath <- IO( Path( "/Users/ostrygun/" + req.uri.getPath() ))
-        u <- req.stream.through( Files[IO].writeAll( reqPath ) ).compile.drain
-        //u <- req.stream.chunks.foreach( c => IO.println( c.size )).compile.drain
+        reqPath <- IO(Path("/Users/ostrygun/" + req.uri.getPath()))
+        u <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
+        // u <- req.stream.chunks.foreach( c => IO.println( c.size )).compile.drain
 
-      } yield( Response.Ok().asText("OK"))
+      } yield (Response.Ok().asText("OK"))
 
     // best path for h2spec
     case GET -> Root => IO(Response.Ok().asText("OK"))
@@ -34,9 +34,9 @@ object MyApp extends IOApp {
       val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
       IO(Response.Ok().asStream(ts2))
 
-    case GET -> Root / "pic" =>
+    case GET -> Root / StringVar(file) =>
       val FOLDER_PATH = "/Users/ostrygun/web_root/"
-      val FILE = "IMG_0278.jpeg"
+      val FILE = s"$file"
       val BLOCK_SIZE = 16000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
@@ -46,8 +46,8 @@ object MyApp extends IOApp {
         .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
         .contentType(ContentType.contentTypeFromFileName(FILE)))
 
-    //your web site files in the folder "web" under web_root.    
-    //browser path: https://localhost:8443/web/index.html
+    // your web site files in the folder "web" under web_root.
+    // browser path: https://localhost:8443/web/index.html
     case req @ GET -> "site" /: _ =>
       val FOLDER_PATH = "/Users/ostrygun/web_root/"
       val BLOCK_SIZE = 16000
