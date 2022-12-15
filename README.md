@@ -106,17 +106,18 @@ Simple file retrieval.
 
 ```scala
 
-case GET -> Root / "pic" =>
+ case GET -> Root / StringVar(file) =>
       val FOLDER_PATH = "/Users/user000/web_root/"
-      val FILE = "IMG_0278.jpeg"
+      val FILE = s"$file"
       val BLOCK_SIZE = 16000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-        jstream <- IO.blocking(new java.io.FileInputStream( jpath ) )
-      } yield ( Response
-              .Ok()
-              .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
-              .contentType(ContentType.contentTypeFromFileName(FILE)) )
+        jstream <- IO.blocking(new java.io.FileInputStream(jpath))
+      } yield (Response
+        .Ok()
+        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+        .contentType(ContentType.contentTypeFromFileName(FILE)))
+      } 
 
 ```
 
