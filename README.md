@@ -57,20 +57,20 @@ Finished in 3.7611 seconds<br>
 ```
 
 MacBook Pro (16-inch, 2019)
-h2load -D10  -c33 -m20 https://localhost:8443/test
-
+h2load  -D10 -c32 -t4 -m20 https://localhost:8443/test
 
 ```
-finished in 10.00s, 87346.80 req/s, 853.08KB/s
-requests: 873468 total, 873788 started, 873468 done, 873468 succeeded, 0 failed, 0 errored, 0 timeout
-status codes: 873468 2xx, 0 3xx, 0 4xx, 0 5xx
-traffic: 8.33MB (8735544) total, 853.00KB (873468) headers (space savings 90.00%), 0B (0) data
+finished in 10.00s, 121067.50 req/s, 1.15MB/s
+requests: 1210675 total, 1211315 started, 1210675 done, 1210675 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 1210675 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 11.55MB (12108478) total, 1.15MB (1210675) headers (space savings 90.00%), 0B (0) data
                      min         max         mean         sd        +/- sd
-time for request:      108us     15.83ms      2.28ms      1.03ms    73.51%
-time for connect:    28.15ms     35.16ms     31.76ms      2.32ms    62.50%
-time to 1st byte:    35.93ms     38.28ms     36.77ms       641us    75.00%
-req/s           :    5425.98     5497.17     5458.79       21.32    75.00%
+time for request:      254us     35.76ms      5.15ms      1.96ms    82.35%
+time for connect:    42.95ms    116.00ms     74.39ms     29.24ms    43.75%
+time to 1st byte:    44.37ms    138.99ms     79.64ms     32.58ms    50.00%
+req/s           :    3729.09     3845.64     3783.19       25.26    75.00%
 ```
+
 Please, refer to for use cases.
 quartz-h2/examples/
 Route DSL is the same as for zio-tls-http, <br>
