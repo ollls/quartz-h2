@@ -56,7 +56,7 @@ Finished in 3.7611 seconds<br>
 94 tests, 92 passed, 1 skipped, 1 failed<br>
 ```
 
-MacBook Pro (16-inch, 2019)
+MacBook Pro (16-inch, 2019)<br>
 h2load  -D10 -c32 -t4 -m20 https://localhost:8443/test
 
 ```
