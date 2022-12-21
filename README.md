@@ -14,6 +14,7 @@ Http/2 weights and dependecy are not implemented, for performance reasons.
 Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
 
 >**Recommended JSON parser: https://github.com/plokhotnyuk/jsoniter-scala**<br>
+example project: https://github.com/ollls/json-template-qh2<br>
 
  * Use cases:
  https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
