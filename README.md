@@ -3,7 +3,7 @@
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.0"
 ```
-01/05/23 - http multipart support added.
+01/05/23 - *http multipart support added.*
 
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
