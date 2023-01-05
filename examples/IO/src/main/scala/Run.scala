@@ -9,17 +9,22 @@ import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
 import fs2.io.file.{Files, Path}
+import io.quartz.util.MultiPart
+import cats.syntax.all.catsSyntaxApplicativeByName
 
 object MyApp extends IOApp {
 
+  var HOME_DIR = "/Users/user000/"   //last slash is important!
+
   val R: HttpRouteIO = {
+
+    case req @ POST -> Root / "mpart" =>
+      MultiPart.writeAll(req, HOME_DIR ) *> IO(Response.Ok())
 
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
-        reqPath <- IO(Path("/Users/ostrygun/" + req.uri.getPath()))
-        u <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
-        // u <- req.stream.chunks.foreach( c => IO.println( c.size )).compile.drain
-
+        reqPath <- IO(Path( HOME_DIR + req.uri.getPath()))
+        _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
       } yield (Response.Ok().asText("OK"))
 
     // best path for h2spec
@@ -35,7 +40,7 @@ object MyApp extends IOApp {
       IO(Response.Ok().asStream(ts2))
 
     case GET -> Root / StringVar(file) =>
-      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val FOLDER_PATH = HOME_DIR + "web_root/"
       val FILE = s"$file"
       val BLOCK_SIZE = 16000
       for {
@@ -49,7 +54,7 @@ object MyApp extends IOApp {
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
     case req @ GET -> "site" /: _ =>
-      val FOLDER_PATH = "/Users/ostrygun/web_root/"
+      val FOLDER_PATH = HOME_DIR + "web_root/"
       val BLOCK_SIZE = 16000
       for {
         reqPath <- IO(req.uri.getPath())
