@@ -121,6 +121,15 @@ Simple file retrieval.
 
 ```
 
+HTTP Multipart.
+
+```scala
+
+    case req @ POST -> Root / "mpart" =>
+      MultiPart.writeAll(req, HOME_DIR ) *> IO(Response.Ok())
+      
+```
+
 Web site service.
 
 ```scala
