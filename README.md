@@ -3,7 +3,27 @@
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.0"
 ```
-01/05/23 - *http multipart support added.*
+01/05/23 - * http multipart support added.*
+
+```scala
+  case req @ POST -> Root / "mpart" =>
+      MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
+```
+
+01/10/23 - * webfilter added *
+'''scala
+  val filter: WebFilter = (r: Request) =>
+    IO(
+      Option.when(r.uri.getPath().endsWith("na.txt"))(
+        Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())
+      )
+    )
+    ...
+    ...
+    ...
+    
+    exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
+'''
 
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
