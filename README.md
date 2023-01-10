@@ -3,7 +3,7 @@
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.0"
 ```
-Template project with quartz-h2 from maven repo: https://github.com/ollls/json-template-qh2
+* Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2 *
 
 * List of recent updates, pending release:
 
