@@ -3,6 +3,8 @@
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.0"
 ```
+https://github.com/ollls/json-template-qh2
+
 * List of recent updates, pending release:
 
 01/05/23 - *http multipart support added.*
