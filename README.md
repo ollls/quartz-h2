@@ -5,14 +5,14 @@
 ```
 * List of recent updates, pending release:
 
-01/05/23 - * http multipart support added.*
+01/05/23 - *http multipart support added.*
 
 ```scala
   case req @ POST -> Root / "mpart" =>
       MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
 ```
 
-01/10/23 - * webfilter added *
+01/10/23 - *webfilter added*
 
 ```scala
   val filter: WebFilter = (r: Request) =>
