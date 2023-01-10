@@ -10,20 +10,41 @@ import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
 import fs2.io.file.{Files, Path}
 import io.quartz.util.MultiPart
+import io.quartz.http2.model.StatusCode
+import io.quartz.http2.routes.WebFilter
 import cats.syntax.all.catsSyntaxApplicativeByName
 
 object MyApp extends IOApp {
 
-  var HOME_DIR = "/Users/user000/"   //last slash is important!
+  /*
+  val filter: WebFilter = (r: Request) =>
+    if (r.uri.getPath().endsWith("test70.jpeg"))
+      IO(Some(Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())))
+    else IO(None)*/
+
+  /*
+  val filter: WebFilter = (r: Request) =>
+    IO(r.uri.getPath().endsWith("test70.jpeg"))
+      .ifM(IO(Some(Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath()))), IO(None))*/
+
+  val filter: WebFilter = (r: Request) =>
+    IO(
+      Option.when(r.uri.getPath().endsWith("na.txt"))(
+        Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())
+      )
+    )
+
+
+  var HOME_DIR = "/Users/ostrygun/" // last slash is important!
 
   val R: HttpRouteIO = {
 
     case req @ POST -> Root / "mpart" =>
-      MultiPart.writeAll(req, HOME_DIR ) *> IO(Response.Ok())
+      MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
 
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
-        reqPath <- IO(Path( HOME_DIR + req.uri.getPath()))
+        reqPath <- IO(Path(HOME_DIR + req.uri.getPath()))
         _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
       } yield (Response.Ok().asText("OK"))
 
@@ -70,7 +91,7 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, sync = false)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
 
     } yield (exitCode)
 

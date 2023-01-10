@@ -8,9 +8,14 @@ import io.quartz.http2.model.{Request, Response, Headers, StatusCode, Method}
 import cats.Monad
 import cats.data.ReaderT
 
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import io.quartz.MyLogger._
+
 type HttpRoute = Request => IO[Option[Response]]
 type HttpRouteRIO[Env] = PartialFunction[Request, RIO[Env, Response]]
 type HttpRouteIO = PartialFunction[Request, IO[Response]]
+type WebFilter = Request => IO[Option[Response]]
 
 type RIO[E, T] = ReaderT[IO, E, T]
 
@@ -31,12 +36,21 @@ object RIO {
 
 object Routes {
   //route withot environment, gives direct HttpRoute
-  def of[Env](pf: HttpRouteIO): HttpRoute = {
-    val T1: Request => IO[Option[Response]] = (request: Request) =>
+  def of[Env](pf: HttpRouteIO, filter: WebFilter): HttpRoute = {
+    val route: Request => IO[Option[Response]] = (request: Request) =>
       pf.lift(request) match {
         case Some(c) => c.flatMap(r => (IO(Option(r))))
         case None    => (IO(None))
       }
-    T1
+    (r0: Request) =>
+      filter(r0).flatMap {
+        // if filter:None - you call a real route
+        // if filter:Some - you return filter response righ away.
+        case None => route(r0)
+        case Some(response) =>
+            Logger[IO].error(s"Web filter denied access with response code ${response.code}") >> IO(Some(response)) 
+      }  
+
+    
   }
 }

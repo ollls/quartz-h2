@@ -47,6 +47,7 @@ import io.quartz.http2.routes.HttpRoute
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteRIO
 import io.quartz.http2.routes.HttpRouteIO
+import io.quartz.http2.routes.WebFilter
 
 import java.net._
 import java.io._
@@ -297,20 +298,10 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     ia.getHostString()
   }
 
-  def startIO(pf: HttpRouteIO, sync: Boolean): IO[ExitCode] = {
-    start(Routes.of(pf), sync)
+  def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(None), sync: Boolean): IO[ExitCode] =
+    start(Routes.of(pf, filter), sync)
 
-    //   val T1: HttpRoute = (request: Request) => pf.lift(request) match {
-    //      case Some(c) => c.flatMap(r => (IO(Option(r))))
-    //      case None    => (IO(None))
-    //    }
-
-    //    val ret : IO[ExitCode] = start( T1 )
-    //    ret
-
-  }
-
-  def startRIO[Env](env: Env, pf: HttpRouteRIO[Env]): IO[ExitCode] = {
+  def startRIO[Env](env: Env, pf: HttpRouteRIO[Env], filter: WebFilter = (r0: Request) => IO(None)): IO[ExitCode] = {
     val fjj = new ForkJoinWorkerThreadFactory {
       val num = new AtomicInteger();
       def newThread(pool: ForkJoinPool) = {
@@ -331,9 +322,18 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         case None    => RIO.liftIO(IO(None))
       }
 
-    val routeIO2 = (request: Request) => routeIO(request).run(env)
+    val route = (request: Request) => routeIO(request).run(env)
 
-    run0(e, routeIO2, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+    val routeWithFilter = (r0: Request) =>
+      filter(r0).flatMap {
+        // if filter:None - you call a real route
+        // if filter:Some - you return filter response righ away.
+        case None => route(r0)
+        case Some(response) =>
+          Logger[IO].error(s"Web filter denied acess with response code ${response.code}") >> IO(Some(response))
+      }
+
+    run0(e, routeWithFilter, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
