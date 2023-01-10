@@ -11,7 +11,8 @@
 ```
 
 01/10/23 - * webfilter added *
-'''scala
+
+```scala
   val filter: WebFilter = (r: Request) =>
     IO(
       Option.when(r.uri.getPath().endsWith("na.txt"))(
@@ -23,7 +24,7 @@
     ...
     
     exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
-'''
+```
 
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
