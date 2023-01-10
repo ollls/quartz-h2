@@ -1,9 +1,14 @@
 
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.2.0-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.2.0)
+
+100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
+Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
+
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.0"
 ```
 *Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2*
+
 
 * List of recent updates, pending release:
 
@@ -29,9 +34,6 @@
     
     exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
 ```
-
-100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
-Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
 
 * Tested and optimized to produce highest possible TPS. <br><br>( **120K TPS** on MacBook, see details below )<br><br>
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.
