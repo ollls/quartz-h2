@@ -354,7 +354,10 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
       val ec = ExecutionContext.fromExecutor(e)
 
-      run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      if (sslCtx != null)
+        run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      else
+        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
     } else {
       // Loom test commented out, just FYI
       // val e = Executors.newVirtualThreadPerTaskExecutor()
@@ -434,6 +437,39 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
             .start)
         )
         .foreverM
+
+    } yield (ExitCode.Success)
+  }
+
+  def run3(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+    for {
+      addr <- IO(new InetSocketAddress(HOST, PORT))
+      _ <- Logger[IO].info("HTTP/2 h2c service: QuartzH2 (async - Java NIO)")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2c idle timeout: $keepAliveMs Ms")
+      _ <- Logger[IO].info(
+        s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}"
+      )
+      group <- IO(
+        AsynchronousChannelGroup.withThreadPool(e)
+      )
+      server_ch <- IO(
+        group.provider().openAsynchronousServerSocketChannel(group).bind(addr)
+      )
+      
+      accept = Logger[IO].debug("Wait on accept") >> TCPChannel
+        .accept(server_ch)
+        .flatTap(c =>
+          Logger[IO].info(
+            s"Connect from remote peer: ${hostName(c.ch.getRemoteAddress())}"
+          )
+        )
+      _ <- accept.flatMap(ch =>
+        IO(ch)
+          .bracket(ch => doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]))(_.close())
+          .handleErrorWith(e => { errorHandler(e) })
+          .start
+      ).foreverM
 
     } yield (ExitCode.Success)
   }

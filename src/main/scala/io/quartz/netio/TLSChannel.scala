@@ -393,13 +393,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   def ssl_init(): IO[Chunk[Byte]] = {
     for {
       _ <- f_SSL.setUseClientMode(false)
-      _ <- IO(f_SSL.engine.setHandshakeApplicationProtocolSelector((eng, list) => {
-        if (list.asScala.find(_ == "h2").isDefined) "h2"
-        else null
-      }))
-
       x <- doHandshake()
-
       _ <-
         if (x._1 != FINISHED) {
           IO.raiseError(new TLSChannelError("TLS Handshake error, plain text connection?"))
