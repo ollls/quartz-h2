@@ -206,9 +206,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     for {
       buf <-
         if (leftOver.size > 0) IO(leftOver) else ch.read(HTTP1_KEEP_ALIVE_MS)
-
       test <- IO(buf.take(PrefaceString.length))
-
       testbb <- IO(test.toByteBuffer)
       isOK <- IO(Frames.checkPreface(testbb))
       _ <- Logger[IO].trace("doConnect() - Preface result: " + isOK)
@@ -283,8 +281,8 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
   def errorHandler(e: Throwable) = {
     e match {
       case BadProtocol(ch, e) =>
-        ch.write(ByteBuffer.wrap(responseStringNo11().getBytes)) >> IO.println(
-          e.toString
+        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol") >> ch.write(
+          ByteBuffer.wrap(responseStringNo11().getBytes)
         )
       case e: java.nio.channels.InterruptedByTimeoutException =>
         Logger[IO].info("Remote peer disconnected on timeout")
@@ -394,8 +392,10 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         .flatMap(ch =>
           (IO(TLSChannel(sslCtx, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
-            .bracket(ch => doConnect(ch._1, maxStreams, keepAliveMs, R, ch._2))(ch => ch._1.close())
-            .handleErrorWith(e => { errorHandler(e) })
+            .bracket(ch =>
+              doConnect(ch._1, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => { errorHandler(e) })
+            )(ch => ch._1.close())
+            .handleErrorWith(e => { errorHandler(e) >> ch.close() })
             .start)
         )
         .foreverM
@@ -432,8 +432,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       _ <- accept
         .flatMap(ch =>
           (IO(ch)
-            .bracket(ch => doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]))(ch => ch.close())
-            .handleErrorWith(e => { errorHandler(e) })
+            .bracket(ch =>
+              doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+            )(ch => ch.close())
             .start)
         )
         .foreverM
@@ -456,7 +457,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       server_ch <- IO(
         group.provider().openAsynchronousServerSocketChannel(group).bind(addr)
       )
-      
+
       accept = Logger[IO].debug("Wait on accept") >> TCPChannel
         .accept(server_ch)
         .flatTap(c =>
@@ -464,12 +465,15 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
             s"Connect from remote peer: ${hostName(c.ch.getRemoteAddress())}"
           )
         )
-      _ <- accept.flatMap(ch =>
-        IO(ch)
-          .bracket(ch => doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]))(_.close())
-          .handleErrorWith(e => { errorHandler(e) })
-          .start
-      ).foreverM
+      _ <- accept
+        .flatMap(ch =>
+          IO(ch)
+            .bracket(ch =>
+              doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+            )(_.close())
+            .start
+        )
+        .foreverM
 
     } yield (ExitCode.Success)
   }
