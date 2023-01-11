@@ -12,12 +12,7 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 
 * List of recent updates, pending release:
 
-01/05/23 - *http multipart support added.*
-
-```scala
-  case req @ POST -> Root / "mpart" =>
-      MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
-```
+01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
 
 01/10/23 - *webfilter added*
 
@@ -28,12 +23,19 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
         Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())
       )
     )
-    ...
-    ...
+    
     ...
     
     exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
 ```
+
+01/05/23 - *http multipart support added*
+
+```scala
+  case req @ POST -> Root / "mpart" =>
+      MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
+```
+
 
 * Tested and optimized to produce highest possible TPS. <br><br>( **120K TPS** on MacBook, see details below )<br><br>
 It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.
