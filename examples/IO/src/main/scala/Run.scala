@@ -5,6 +5,7 @@ import io.quartz.QuartzH2Server
 import io.quartz.http2._
 import io.quartz.http2.model.{Headers, Method, ContentType, Request, Response}
 import io.quartz.http2.model.Method._
+import io.quartz.http2.model.Cookie
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteIO
 import fs2.{Stream, Chunk}
@@ -13,6 +14,10 @@ import io.quartz.util.MultiPart
 import io.quartz.http2.model.StatusCode
 import io.quartz.http2.routes.WebFilter
 import cats.syntax.all.catsSyntaxApplicativeByName
+
+
+object param1 extends QueryParam("param1")
+object param2 extends QueryParam("param2")
 
 object MyApp extends IOApp {
 
@@ -34,11 +39,27 @@ object MyApp extends IOApp {
       )
     )
 
-
-  var HOME_DIR = "/Users/ostrygun/" // last slash is important!
+  var HOME_DIR = "/Users/user000/" // last slash is important!
 
   val R: HttpRouteIO = {
 
+    case req @ GET -> "pub" /: remainig_path =>
+      IO(Response.Ok().asText(remainig_path.toString()))
+
+    // GET with two parameters
+    case req @ GET -> Root / "hello" / "1" / "2" / "user2" :? param1(test) :? param2(test2) =>
+      IO(Response.Ok().asText("param1=" + test + "  " + "param2=" + test2))
+
+    // GET with paameter, cookies and custom headers
+    case GET -> Root / "hello" / "user" / StringVar(userId) :? param1(par) =>
+      val headers = Headers("procid" -> "header_value_from_server", "content-type" -> ContentType.Plain.toString)
+      val c1 = Cookie("testCookie1", "ABCD", secure = true)
+      val c2 = Cookie("testCookie2", "ABCDEFG", secure = false)
+      val c3 =
+        Cookie("testCookie3", "1A8BD0FC645E0", secure = false, expires = Some(java.time.ZonedDateTime.now.plusHours(5)))
+      IO(Response.Ok().hdr(headers).cookie(c1).cookie(c2).cookie(c3).asText(s"$userId with para1 $par"))
+
+    // automatic multi-part upload, file names preserved
     case req @ POST -> Root / "mpart" =>
       MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
 
