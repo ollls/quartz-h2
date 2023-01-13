@@ -43,7 +43,7 @@ class HeaderEncoder(initialMaxTableSize: Int) {
   /** Encode the headers into the payload of a HEADERS frame */
   def encodeHeaders(hs: Headers): ByteBuffer = {  //hSem used
     hs.foreach { case (k, v) =>
-      val keyBytes = k.getBytes(US_ASCII)
+      val keyBytes = k.toLowerCase().getBytes(US_ASCII)
       val valueBytes = v.getBytes(US_ASCII)
       encoder.encodeHeader(os, keyBytes, valueBytes, false)
     }
