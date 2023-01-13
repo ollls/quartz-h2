@@ -1,10 +1,10 @@
 import Dependencies._
 
 ThisBuild / scalaVersion := "3.2.1"
-ThisBuild / version := "0.2.0"
+ThisBuild / version := "0.2.1"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
-
+ThisBuild / versionScheme := Some("strict")
 ThisBuild / developers := List(
   Developer(
     id    = "ostrygun",
@@ -16,6 +16,13 @@ ThisBuild / developers := List(
 
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 ThisBuild / homepage := Some(url("https://github.com/ollls/quartz-h2"))
+ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
+ThisBuild / credentials += Credentials(
+  "GnuPG Key ID",
+  "gpg",
+  "F85809244447DB9FA35A3C9B1EB44A5FC60F4104", // key identifier
+  "ignored" // this field is ignored; passwords are supplied by pinentry
+)
 
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / publishTo := {
