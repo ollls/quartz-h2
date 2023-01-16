@@ -13,6 +13,11 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 * List of recent updates, pending release:
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
+```scala
+  //ssl context null will switch to h2c plain text
+  exitCode <- new QuartzH2Server("localhost", 8443, 16000, null).startIO(R, filter, sync = false)
+  
+```
 
 01/10/23 - *webfilter added*
 
