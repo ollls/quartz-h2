@@ -10,7 +10,7 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 *Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2*
 
 
-* List of recent updates, pending release:
+* List of recent updates - Release: 0.2.1
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
 ```scala
