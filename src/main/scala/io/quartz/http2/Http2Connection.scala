@@ -254,7 +254,7 @@ class Http2Connection(
     ch: IOChannel,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
-    outq: Dequeue[IO, ByteBuffer],
+    outq: Queue[IO, ByteBuffer],
     outDataQEventQ: Queue[IO, Boolean],
     globalTransmitWindow: Ref[IO, Long],
     val globalBytesOfPendingInboundData: Ref[IO, Int], // metric
@@ -304,7 +304,7 @@ class Http2Connection(
             // frameType = t._2
             flags = t._3
             // streamId = t._4
-            _ <- this.sendFrameLowPriority(data_frame)
+            _ <- this.sendFrame(data_frame)
             x <- outDataQEventQ.take
             _ <- outDataQEventQ.take.whenA(
               x == true
@@ -864,10 +864,7 @@ class Http2Connection(
       }
     } yield ()
 
-  def sendFrame(b: ByteBuffer) = outq.offerFront(b)
-
-  def sendFrameLowPriority(b: ByteBuffer) = outq.offerBack(b)
-
+  def sendFrame(b: ByteBuffer) = outq.offer(b)
   ////////////////////////////////////////////
 
   def route(request: Request): IO[Response] = for {
@@ -1430,7 +1427,7 @@ class Http2Connection(
                       // _ <- IO.println("MAX_FRAME_SIZE2 = " + this.settings.MAX_FRAME_SIZE)
 
                       _ <- sendFrame(Frames.makeSettingsFrame(ack = false, this.settings)).whenA(settings_done == false)
-                      _ <- sendFrameLowPriority(Frames.makeSettingsAckFrame())
+                      _ <- sendFrame(Frames.makeSettingsAckFrame())
 
                       _ <- IO {
                         if (settings_done == false) settings_done = true
