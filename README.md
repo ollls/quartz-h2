@@ -1,16 +1,16 @@
 
-[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.2.0-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.2.0)
+[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.2.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.2.1)
 
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
 Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
 
 ```
-"io.github.ollls" %% "quartz-h2" % "0.2.0"
+"io.github.ollls" %% "quartz-h2" % "0.2.1"
 ```
 *Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2*
 
 
-* List of recent updates, pending release:
+* List of recent updates - Release: 0.2.1
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
 ```scala
