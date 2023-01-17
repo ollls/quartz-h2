@@ -5,7 +5,7 @@
 Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
 
 ```
-"io.github.ollls" %% "quartz-h2" % "0.2.0"
+"io.github.ollls" %% "quartz-h2" % "0.2.1"
 ```
 *Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2*
 
