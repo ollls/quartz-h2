@@ -13,7 +13,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook, s
 * Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2<br>
 * ZIO2 port: https://github.com/ollls/zio-quartz-h2
 
-#### Pending updates not included in release
+### Pending updates not included in release
 
  01/20/2023 New webfilter support with Either[Response, Request]
 
@@ -32,7 +32,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook, s
     case req @ GET -> Root / "headers" => IO(Response.Ok().asText(req.headers.printHeaders))
 ```
 
-#### List of recent updates - Release: 0.2.1
+### List of recent updates - Release: 0.2.1
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
 ```scala
