@@ -15,7 +15,8 @@ import io.quartz.MyLogger._
 type HttpRoute = Request => IO[Option[Response]]
 type HttpRouteRIO[Env] = PartialFunction[Request, RIO[Env, Response]]
 type HttpRouteIO = PartialFunction[Request, IO[Response]]
-type WebFilter = Request => IO[Option[Response]]
+type WebFilterOpt = Request => IO[Option[Response]]
+type WebFilter = Request => IO[Either[Response, Request]]
 
 type RIO[E, T] = ReaderT[IO, E, T]
 
@@ -35,8 +36,8 @@ object RIO {
 }
 
 object Routes {
-  //route withot environment, gives direct HttpRoute
-  def of[Env](pf: HttpRouteIO, filter: WebFilter): HttpRoute = {
+  // route withot environment, gives direct HttpRoute
+  def of[Env](pf: HttpRouteIO, filter: WebFilterOpt): HttpRoute = {
     val route: Request => IO[Option[Response]] = (request: Request) =>
       pf.lift(request) match {
         case Some(c) => c.flatMap(r => (IO(Option(r))))
@@ -48,9 +49,23 @@ object Routes {
         // if filter:Some - you return filter response righ away.
         case None => route(r0)
         case Some(response) =>
-            Logger[IO].error(s"Web filter denied access with response code ${response.code}") >> IO(Some(response)) 
-      }  
+          Logger[IO].error(s"Web filter denied access with response code ${response.code}") >> IO(Some(response))
+      }
+  }
 
-    
+  import scala.reflect.ClassTag
+  def of2[Env](pf: HttpRouteIO, filter: WebFilter): HttpRoute = {
+    val route: Request => IO[Option[Response]] = (request: Request) =>
+      pf.lift(request) match {
+        case Some(c) => c.flatMap(r => (IO(Option(r))))
+        case None    => (IO(None))
+      }
+    (r0: Request) =>
+      filter(r0).flatMap {
+        case Right(request) => route(request)
+        case Left(response) =>
+          Logger[IO].error(s"Web filter denied access with response code ${response.code}") >> IO(Some(response))
+      }
+
   }
 }

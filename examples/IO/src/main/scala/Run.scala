@@ -15,33 +15,25 @@ import io.quartz.http2.model.StatusCode
 import io.quartz.http2.routes.WebFilter
 import cats.syntax.all.catsSyntaxApplicativeByName
 
-
 object param1 extends QueryParam("param1")
 object param2 extends QueryParam("param2")
 
 object MyApp extends IOApp {
 
-  /*
-  val filter: WebFilter = (r: Request) =>
-    if (r.uri.getPath().endsWith("test70.jpeg"))
-      IO(Some(Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())))
-    else IO(None)*/
-
-  /*
-  val filter: WebFilter = (r: Request) =>
-    IO(r.uri.getPath().endsWith("test70.jpeg"))
-      .ifM(IO(Some(Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath()))), IO(None))*/
-
-  val filter: WebFilter = (r: Request) =>
+  val filter: WebFilter = (request: Request) =>
     IO(
-      Option.when(r.uri.getPath().endsWith("na.txt"))(
-        Response.Error(StatusCode.Forbidden).asText("Denied: " + r.uri.getPath())
+      Either.cond(
+        !request.uri.getPath().endsWith("na.txt"),
+        request.hdr("test_tid" -> "ABC123Z9292827"),
+        Response.Error(StatusCode.Forbidden).asText("Denied: " + request.uri.getPath())
       )
     )
 
-  var HOME_DIR = "/Users/user000/" // last slash is important!
+  var HOME_DIR = "/Users/ostrygun/" // last slash is important!
 
   val R: HttpRouteIO = {
+
+    case req @ GET -> Root / "headers" => IO(Response.Ok().asText(req.headers.printHeaders))
 
     case req @ GET -> "pub" /: remainig_path =>
       IO(Response.Ok().asText(remainig_path.toString()))

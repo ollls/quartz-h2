@@ -48,6 +48,7 @@ import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteRIO
 import io.quartz.http2.routes.HttpRouteIO
 import io.quartz.http2.routes.WebFilter
+import io.quartz.http2.routes.WebFilterOpt
 
 import java.net._
 import java.io._
@@ -296,10 +297,17 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     ia.getHostString()
   }
 
-  def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(None), sync: Boolean): IO[ExitCode] =
+  // Filter returning just Option[Request]
+  def startIO2(pf: HttpRouteIO, filter: WebFilterOpt = (r0: Request) => IO(None), sync: Boolean = false): IO[ExitCode] = {
     start(Routes.of(pf, filter), sync)
+  }
 
-  def startRIO[Env](env: Env, pf: HttpRouteRIO[Env], filter: WebFilter = (r0: Request) => IO(None)): IO[ExitCode] = {
+  // Filter returning Either[Request, Response]
+  // It allows to inject or modify Request before it reaches a user route.
+  def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
+    start(Routes.of2(pf, filter), sync)
+
+  def startRIO[Env](env: Env, pf: HttpRouteRIO[Env], filter: WebFilterOpt = (r0: Request) => IO(None)): IO[ExitCode] = {
     val fjj = new ForkJoinWorkerThreadFactory {
       val num = new AtomicInteger();
       def newThread(pool: ForkJoinPool) = {
