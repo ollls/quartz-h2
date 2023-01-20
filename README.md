@@ -14,12 +14,9 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 
 * Pending updates not included in release
 
- 01/20/2023 New webfilter support.
+ 01/20/2023 New webfilter support with Either[Response, Request]
 
 ```scala
-type WebFilter = Request => IO[Either[Response, Request]]
-
-//example
  val filter: WebFilter = (request: Request) =>
    IO(
       Either.cond(
