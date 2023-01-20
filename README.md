@@ -41,7 +41,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook, s
   
 ```
 
-01/10/23 - *webfilter added*
+01/10/23 - *webfilter Request => IO[Option[Response]] added*
 
 ```scala
   val filter: WebFilter = (r: Request) =>
