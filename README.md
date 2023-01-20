@@ -12,6 +12,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook wi
 ```
 * Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2<br>
 * ZIO2 port: https://github.com/ollls/zio-quartz-h2
+* Web App example/use cases: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
 
 ### Pending updates not included in release
 
