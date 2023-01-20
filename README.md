@@ -12,6 +12,24 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 
 * ZIO2 port: https://github.com/ollls/zio-quartz-h2
 
+* Pending updates not included in release
+
+ 01/20/2023 New webfilter support.
+
+```scala
+type WebFilter = Request => IO[Either[Response, Request]]
+
+//example
+ val filter: WebFilter = (request: Request) =>
+   IO(
+      Either.cond(
+        !request.uri.getPath().endsWith("na.txt"),
+        request.hdr("test_tid" -> "ABC123Z9292827"),
+        Response.Error(StatusCode.Forbidden).asText("Denied: " + request.uri.getPath())
+      )
+    )
+```
+
 * List of recent updates - Release: 0.2.1
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
