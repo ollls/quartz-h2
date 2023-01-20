@@ -10,7 +10,7 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 ```
 *Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2*
 
-*ZIO2 port: https://github.com/ollls/zio-quartz-h2
+* ZIO2 port: https://github.com/ollls/zio-quartz-h2
 
 * List of recent updates - Release: 0.2.1
 
