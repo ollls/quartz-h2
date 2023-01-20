@@ -30,7 +30,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook wi
     )
     
     ...
-    //How to check/debug headers
+    //How to validate headers in request
     case req @ GET -> Root / "headers" => IO(Response.Ok().asText(req.headers.printHeaders))
 ```
 
