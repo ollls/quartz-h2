@@ -63,7 +63,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook, s
       MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
 ```
 
-#### How to run examples:<br>
+### How to run examples:<br>
 
 ```
  sbt IO/run
@@ -73,7 +73,7 @@ Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook, s
  ```
 
 
-#### Performance test tool:
+### Performance test tool:
 https://nghttp2.org/documentation/h2load-howto.html<br>
 http2 spec compatibility tests:
 https://formulae.brew.sh/formula/h2spec
@@ -88,7 +88,7 @@ Look at https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/
 ```
 
 
-#### How to run h2spec:
+### How to run h2spec:
 
 1. Start server with "sbt IO/run"<br>
 2. ./h2spec http2 -h localhost -p 8443 -t -k<br>
@@ -114,9 +114,8 @@ time to 1st byte:    44.37ms    138.99ms     79.64ms     32.58ms    50.00%
 req/s           :    3729.09     3845.64     3783.19       25.26    75.00%
 ```
 
-Please, refer to for use cases.
-quartz-h2/examples/
-Route DSL is the same as for zio-tls-http, <br>
+### Use cases/example.
+Please, refer to for use cases: quartz-h2/examples/
 You can easily stream any big file in and out ( GET/POST) with fs2 stream. 
 
 ```scala
