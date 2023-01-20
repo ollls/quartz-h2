@@ -2,14 +2,18 @@
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.2.1.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.2.1.1)
 
 100% asyncronous Java NIO based implementation of http/2 packet streaming server with TLS encryption implemented as scala CATS effect.
-Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).<br>
+Direct native translation of fs2 stream chunks into http2 packets and vice versa, packets to fs2 chunks (inbound and outbound).
+Tested and optimized to produce highest possible TPS. <br>( **120K TPS** on MacBook, see details below )<br>
+It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.
+Http/2 weights and dependecy are not implemented, for performance reasons. 
+
 
 ```
 "io.github.ollls" %% "quartz-h2" % "0.2.1"
 "io.github.ollls" %% "quartz-h2" % "0.2.1.1" - with cats effects 3.4.5 and fs2 3.4.0
 ```
-Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2<br>
-ZIO2 port: https://github.com/ollls/zio-quartz-h2
+* Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2<br>
+* ZIO2 port: https://github.com/ollls/zio-quartz-h2
 
 #### Pending updates not included in release
 
@@ -30,7 +34,7 @@ ZIO2 port: https://github.com/ollls/zio-quartz-h2
     case req @ GET -> Root / "headers" => IO(Response.Ok().asText(req.headers.printHeaders))
 ```
 
-* List of recent updates - Release: 0.2.1
+#### List of recent updates - Release: 0.2.1
 
 01/10/23 - *h2c (plain text) http/2 support enabled, h2load gives: 175K TPS with 20 streams and 32 connections*
 ```scala
@@ -61,21 +65,7 @@ ZIO2 port: https://github.com/ollls/zio-quartz-h2
       MultiPart.writeAll(req, HOME_DIR) *> IO(Response.Ok())
 ```
 
-
-* Tested and optimized to produce highest possible TPS. <br><br>( **120K TPS** on MacBook, see details below )<br><br>
-It uses single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects.
-Http/2 weights and dependecy are not implemented, for performance reasons. 
-Goal was to reach the highest possible throughtput with 10-20 multiple highly paralel http/2 streams relying on excelent CATS Effect fiber manager.
-
->**Recommended JSON parser: https://github.com/plokhotnyuk/jsoniter-scala**<br>
-example project: https://github.com/ollls/json-template-qh2<br>
-
- * Use cases:
- https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
- 
- * to change debug level: edit logback-test.xml<br>
- 
- * how to run examples:<br>
+#### How to run examples:<br>
 
 ```
  sbt IO/run
@@ -85,7 +75,7 @@ example project: https://github.com/ollls/json-template-qh2<br>
  ```
 
 
-* performance test tool:
+#### Performance test tool:
 https://nghttp2.org/documentation/h2load-howto.html<br>
 http2 spec compatibility tests:
 https://formulae.brew.sh/formula/h2spec
@@ -100,7 +90,7 @@ Look at https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/
 ```
 
 
-How to run h2spec:
+#### How to run h2spec:
 
 1. Start server with "sbt IO/run"<br>
 2. ./h2spec http2 -h localhost -p 8443 -t -k<br>
