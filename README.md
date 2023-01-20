@@ -25,6 +25,10 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
         Response.Error(StatusCode.Forbidden).asText("Denied: " + request.uri.getPath())
       )
     )
+    
+    ...
+    
+    case req @ GET -> Root / "headers" => IO(Response.Ok().asText(req.headers.printHeaders))
 ```
 
 * List of recent updates - Release: 0.2.1
