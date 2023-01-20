@@ -8,11 +8,11 @@ Direct native translation of fs2 stream chunks into http2 packets and vice versa
 "io.github.ollls" %% "quartz-h2" % "0.2.1"
 "io.github.ollls" %% "quartz-h2" % "0.2.1.1" - with cats effects 3.4.5 and fs2 3.4.0
 ```
-## Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2
+### Template project with quartz-h2 from sonata repo: https://github.com/ollls/json-template-qh2
 
-## ZIO2 port: https://github.com/ollls/zio-quartz-h2
+### ZIO2 port: https://github.com/ollls/zio-quartz-h2
 
-## Pending updates not included in release
+### Pending updates not included in release
 
  01/20/2023 New webfilter support with Either[Response, Request]
 
