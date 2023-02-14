@@ -33,7 +33,7 @@ object TCPChannel {
             /*println("ef ****** " + t.toString());*/
             cb(Left(t))
           }
-        })).map(_ => None)
+        })).map(_ => Some(IO.unit))
       })
     )
   }
