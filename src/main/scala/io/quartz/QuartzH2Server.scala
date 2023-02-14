@@ -48,7 +48,6 @@ import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteRIO
 import io.quartz.http2.routes.HttpRouteIO
 import io.quartz.http2.routes.WebFilter
-import io.quartz.http2.routes.WebFilterOpt
 
 import java.net._
 import java.io._
@@ -297,56 +296,23 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     ia.getHostString()
   }
 
-  // Filter returning just Option[Request]
-  def startIO2(pf: HttpRouteIO, filter: WebFilterOpt = (r0: Request) => IO(None), sync: Boolean = false): IO[ExitCode] = {
-    start(Routes.of(pf, filter), sync)
-  }
-
   // Filter returning Either[Request, Response]
   // It allows to inject or modify Request before it reaches a user route.
   def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
-    start(Routes.of2(pf, filter), sync)
+    start(Routes.of(pf, filter), sync)
 
-  def startRIO[Env](env: Env, pf: HttpRouteRIO[Env], filter: WebFilterOpt = (r0: Request) => IO(None)): IO[ExitCode] = {
-    val fjj = new ForkJoinWorkerThreadFactory {
-      val num = new AtomicInteger();
-      def newThread(pool: ForkJoinPool) = {
-        val thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
-        thread.setDaemon(true);
-        thread.setName("qh2-pool" + "-" + num.getAndIncrement());
-        thread;
-      }
-    }
-    val cores = Runtime.getRuntime().availableProcessors()
-    val h2streams = cores * 2 // optimal setting tested with h2load
-    val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
-    val ec = ExecutionContext.fromExecutor(e)
-
-    val routeIO: Request => RIO[Env, Option[Response]] = (request: Request) =>
-      pf.lift(request) match {
-        case Some(c) => c.flatMap(r => RIO.liftIO(IO(Option(r))))
-        case None    => RIO.liftIO(IO(None))
-      }
-
-    val route = (request: Request) => routeIO(request).run(env)
-
-    val routeWithFilter = (r0: Request) =>
-      filter(r0).flatMap {
-        // if filter:None - you call a real route
-        // if filter:Some - you return filter response righ away.
-        case None => route(r0)
-        case Some(response) =>
-          Logger[IO].error(s"Web filter denied acess with response code ${response.code}") >> IO(Some(response))
-      }
-
-    run0(e, routeWithFilter, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+  def startRIO[Env](
+      env: Env,
+      pf: HttpRouteRIO[Env],
+      filter: WebFilter = (r0: Request) => IO(Right(r0)),
+      sync: Boolean
+  ): IO[ExitCode] = {
+    start(Routes.of(env, pf, filter), sync)
   }
 
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
-
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
-
     if (sync == false) {
       val fjj = new ForkJoinWorkerThreadFactory {
         val num = new AtomicInteger();
