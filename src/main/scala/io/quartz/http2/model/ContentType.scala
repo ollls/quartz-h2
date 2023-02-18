@@ -22,6 +22,10 @@ final case class ContentType(value: String) extends AnyVal {
   override def toString: String = value
 }
 
+/** An enumeration of HTTP Content-Types. This object provides constants for the standard Content-Types such as
+  * application/json, text/html, etc. Additional Content-Types can be added by creating a new instance of the
+  * `ContentType` class.
+  */
 object ContentType {
   val Plain = ContentType("text/plain")
   val HTML = ContentType("text/html")
@@ -38,22 +42,28 @@ object ContentType {
   val JavaScript = ContentType("application/javascript")
   val Font_VND = ContentType("application/vnd.ms-fontobject")
   val Font_TTF = ContentType("font/ttf")
+  val Font_WOFF = ContentType("font/woff")
+  val Font_WOFF2 = ContentType("font/woff2")
+  val Application_PDF = ContentType("application/pdf")
 
   def contentTypeFromFileName(fileName: String) = {
     val exts = fileName.split("\\.")
     val ext = exts(exts.length - 1)
     ext.toLowerCase() match {
-      case "jpg"  => Image_JPEG
-      case "jpeg" => Image_JPEG
-      case "ttf"  => Font_TTF
-      case "eot"  => Font_VND
-      case "svg"  => Image_SVG
-      case "gif"  => Image_GIF
-      case "png"  => Image_PNG
-      case "html" => HTML
-      case "css"  => CSS
-      case "js"   => JavaScript
-      case _      => Plain
+      case "jpg"   => Image_JPEG
+      case "jpeg"  => Image_JPEG
+      case "ttf"   => Font_TTF
+      case "eot"   => Font_VND
+      case "svg"   => Image_SVG
+      case "gif"   => Image_GIF
+      case "png"   => Image_PNG
+      case "html"  => HTML
+      case "css"   => CSS
+      case "js"    => JavaScript
+      case "woff"  => Font_WOFF
+      case "woff2" => Font_WOFF2
+      case "pdf"   => Application_PDF
+      case _       => Plain
     }
   }
 

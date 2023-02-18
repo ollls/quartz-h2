@@ -3,7 +3,10 @@ package io.quartz.http2.model
 sealed case class Method(val name: String) {
   override def toString: String = name
 }
-
+/**
+  * An enumeration of HTTP methods.
+  * This object provides constants for the standard HTTP methods such as GET, POST, PUT, DELETE, etc.
+  */
 object Method {
   def apply(name: String) = new Method(name)
   val GET     = Method("GET")
