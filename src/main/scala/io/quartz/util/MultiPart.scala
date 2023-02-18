@@ -11,7 +11,6 @@ import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
-
 object MultiPart {
 
   private def extractBoundaryFromMultipart(txt: String) = {
@@ -111,11 +110,13 @@ object MultiPart {
   private def stripQ(str: String) =
     str.stripPrefix("\"").stripSuffix("\"")
 
-  /////////////////////////////////////////////////////////////////////////
-  def stream(multiPartStream: Stream[IO, Byte], boundary: String): Stream[cats.effect.IO, Headers | Chunk[Byte]] =
-    go4(Headers(), multiPartStream, boundary).stream
-
-  ////////////////////////////////////////////////////////////////////////
+  /** Reads an HTTP request and returns a stream of data as a `Stream` of `Headers` or `Chunk[Byte]` values. Assumes
+    * that the incoming data is in the form of an HTTP Multipart message.
+    * @param req
+    *   The HTTP request to read.
+    * @return
+    *   A `Stream` of `Headers` or `Chunk[Byte]` values representing the data in the HTTP request.
+    */
   def stream(req: Request): IO[Stream[IO, Headers | Chunk[Byte]]] = for {
     contType <- IO(req.contentType.toString)
     _ <- IO
@@ -124,7 +125,13 @@ object MultiPart {
     boundary <- IO(extractBoundaryFromMultipart(contType))
   } yield (go4(Headers(), req.stream, boundary).stream)
 
-  // write all multipart files from incoming request data stream
+/**
+  * Writes all multipart files from the incoming request data stream to the specified folder.
+  *
+  * @param req The HTTP request containing the multipart data.
+  * @param folderPath The path to the folder where the files should be written.
+  * @return An `IO` action that writes the files to disk.
+  */
   def writeAll(req: Request, folderPath: String): IO[Unit] =
     for {
 
@@ -151,9 +158,9 @@ object MultiPart {
                 )("filename")
               }.flatTap(fname =>
                 fileRef.get.map(fos => if (fos != null)(fos.close())) *> fileRef.set(
-                  FileOutputStream(folderPath + fname) 
+                  FileOutputStream(folderPath + fname)
                 )
-              ).flatTap( fileName => Logger[IO].info( s"HTTP multipart request: processing file $fileName") )
+              ).flatTap(fileName => Logger[IO].info(s"HTTP multipart request: processing file $fileName"))
             } yield ()
           case b: Chunk[Byte] =>
             for {
