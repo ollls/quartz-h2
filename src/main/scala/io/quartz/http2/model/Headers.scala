@@ -25,6 +25,10 @@ object Headers {
 
 }
 
+/**
+ * An immutable collection of HTTP headers, represented as a mapping from header names to lists of values.
+ * @param tbl a HashMap containing header names as keys and lists of values as associated values
+ */
 class Headers(val tbl: HashMap[String, List[String]]) {
 
   def this(pair: (String, String)) = this(HashMap[String, List[String]]((pair._1, List(pair._2))))
