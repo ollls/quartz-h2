@@ -13,7 +13,6 @@ object Http2Settings {
     out.MAX_CONCURRENT_STREAMS = in.MAX_CONCURRENT_STREAMS
     out.MAX_FRAME_SIZE = in.MAX_FRAME_SIZE
     out.MAX_HEADER_LIST_SIZE = in.MAX_HEADER_LIST_SIZE
-
     out
   }
 
@@ -102,46 +101,8 @@ class Http2Settings {
 
     b.putShort(SettingsTypes.MAX_HEADER_LIST_SIZE)
     b.putInt(MAX_HEADER_LIST_SIZE)
-
   }
 
-  /*
-  /////////////////////////////////////////
-  // validate against "required" and then set new values
-  def setByIDWithValidation(id: Short, value: Int, required: Http2Settings): Option[String] = {
-    id match {
-      case SettingsTypes.HEADER_TABLE_SIZE =>
-        if (value > required.HEADER_TABLE_SIZE)
-          Some(s"HEADER_TABLE_SIZE=$value not to exceed ${required.HEADER_TABLE_SIZE}")
-        else { HEADER_TABLE_SIZE = value; None }
-
-      case SettingsTypes.ENABLE_PUSH =>
-        // if (value != required.ENABLE_PUSH) Some(s"ENABLE_PUSH=$value must be ${required.ENABLE_PUSH}")
-        /*else*/
-        { ENABLE_PUSH = value; None }
-
-      case SettingsTypes.MAX_CONCURRENT_STREAMS =>
-        if (value > required.MAX_CONCURRENT_STREAMS)
-          Some(s"MAX_CONCURRENT_STREAMS=$value not to exceed ${required.MAX_CONCURRENT_STREAMS}")
-        else { MAX_CONCURRENT_STREAMS = value; None }
-
-      case SettingsTypes.INITIAL_WINDOW_SIZE => None
-        if (value < required.INITIAL_WINDOW_SIZE) Some(s"INITIAL_WINDOW_SIZE=$value cannot be less then ${required.INITIAL_WINDOW_SIZE}")
-        else { INITIAL_WINDOW_SIZE = value; None }
-
-      case SettingsTypes.MAX_FRAME_SIZE =>
-        if (value > required.MAX_FRAME_SIZE) Some(s"MAX_FRAME_SIZE=$value not to exceed ${required.MAX_FRAME_SIZE}")
-        else { MAX_FRAME_SIZE = value; None }
-
-      case SettingsTypes.MAX_HEADER_LIST_SIZE =>
-        if (value > required.MAX_HEADER_LIST_SIZE)
-          Some(s"MAX_HEADER_LIST_SIZE=$value not to exceed ${required.MAX_HEADER_LIST_SIZE}")
-        else { MAX_HEADER_LIST_SIZE = value; None }
-
-      // case _ => println("MATCH ERROR") //proper exception later
-    }
-
-  }*/
 
   /////////////////////////////////////////
   def setByID(id: Short, value: Int) = {
@@ -153,7 +114,6 @@ class Http2Settings {
       case SettingsTypes.INITIAL_WINDOW_SIZE  => INITIAL_WINDOW_SIZE = value
       case SettingsTypes.MAX_FRAME_SIZE       => MAX_FRAME_SIZE = value
       case SettingsTypes.MAX_HEADER_LIST_SIZE => MAX_HEADER_LIST_SIZE = value
-      //case _                                  => println("MATCH ERROR")
     }
 
   }
