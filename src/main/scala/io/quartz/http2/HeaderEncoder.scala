@@ -79,8 +79,6 @@ class HeaderDecoder(maxHeaderListSize: Int, val maxTableSize: Int) {
       if ( name_s.startsWith( ":" ) == false ) regularHeaderWasAdded = true
       else if( regularHeaderWasAdded == true  ) throw new Exception("An attempt to add pseudo header after a regular header")
 
-      //System.out.println(new String(name, US_ASCII) + " ------> " + new String(value, US_ASCII))
-
       headerBlockSize += 32 + name.length + value.length // implement size check!!!!
       headers = headers + (name_s -> value_s)
 

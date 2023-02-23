@@ -42,8 +42,6 @@ object Http2Connection {
 
   val FAST_MODE = true
 
-  // val default_server_settings = new Http2Settings()
-
   // TBD - true for now
   implicit val orderForPriorityPackets: Order[ByteBuffer] =
     Order.fromLessThan((_, _) => true)
@@ -78,27 +76,18 @@ object Http2Connection {
       outDataQEventQ <- Queue.unbounded[IO, Boolean]
       http11Req_ref <- Ref[IO].of[Option[Request]](http11request)
 
-      // streamSem <- Semaphore[IO](
-      //  HTTP2_MAX_CONCURRENT_STREAMS
-      // )
       hSem <- Semaphore[IO](1)
 
       globalTransmitWindow <- Ref[IO].of[Long](65535) // (default_server_settings.INITIAL_WINDOW_SIZE)
       globalInboundWindow <- Ref[IO].of(65535) // (default_server_settings.INITIAL_WINDOW_SIZE)
 
       globalBytesOfPendingInboundData <- Ref[IO].of(0)
-
-      // executor <- IO( Executors.newFixedThreadPool(1) )
-      // e <- IO(ExecutionContext.fromExecutor( executor ) )
       runMe2 = outBoundWorkerProc(ch, outq, shutdownPromise)
         .handleErrorWith(e => Logger[IO].debug("outBoundWorkerProc fiber: " + e.toString()))
-        .iterateUntil(_ == true) // .map( _ => executor.shutdown() )
-        // .evalOn(e)
+        .iterateUntil(_ == true)
         .start
 
       _ <- runMe2
-
-      // usedStreamIdCounter <- Ref.of[IO, Int](0)
 
       c <- IO(
         new Http2Connection(
