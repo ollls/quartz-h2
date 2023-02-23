@@ -28,31 +28,6 @@ object Http2Settings {
     }
     settings
   }
-
-  /*
-  def fromSettingsArrayWithValidation(
-      b: ByteBuffer,
-      len: Int,
-      required: Http2Settings
-  ): Either[String, Http2Settings] = {
-    val settings = new Http2Settings()
-    var cntr = 0;
-    while (b.hasRemaining() && cntr < len) {
-      val key: Short = b.getShort()
-      val v: Int = b.getInt
-
-      settings.setByIDWithValidation(key, v, required) match {
-        case Some(value) => return Left(value) // bad practice, fix later
-        case None        => ()
-      }
-
-      cntr += 6
-    }
-
-    Right(settings)
-
-  }*/
-
 }
 
 class Http2Settings {

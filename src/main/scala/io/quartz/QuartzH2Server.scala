@@ -98,14 +98,8 @@ object QuartzH2Server {
 
 class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLContext) {
 
-  // def this(HOST: String) = this(HOST, 8080, 20000, null)
-
   val MAX_HTTP_HEADER_SZ = 16384
   val HTTP1_KEEP_ALIVE_MS = 20000
-
-  // val HOST = "localhost"
-  // val PORT = 8443
-  // val SERVER = "127.0.0.1"
 
   val default_server_settings = new Http2Settings()
 
@@ -217,10 +211,8 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
 
         } else
           (Http2Connection
-              .make(ch, maxStreams, keepAliveMs, route, None)
-              .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))(_.shutdown))
-            // c.processIncoming(buf.drop(PrefaceString.length )) /*>> IO.println("WAIT on close") >> IO.sleep(3.second)*/
-          )
+            .make(ch, maxStreams, keepAliveMs, route, None)
+            .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))(_.shutdown)))
 
     } yield ()
 
@@ -296,26 +288,32 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
     ia.getHostString()
   }
 
-/**
-Starts an HTTP server with the given IO-based route and web filter.
-@param pf The IO-based HTTP route to serve.
-@param filter The web filter to apply to incoming requests, defaults to a filter that allows all requests through.
-@param sync A boolean flag indicating whether the HTTP server should run synchronously or asynchronously.
-@return An IO that produces the exit code of the HTTP server.
-*/
+  /** Starts an HTTP server with the given IO-based route and web filter.
+    * @param pf
+    *   The IO-based HTTP route to serve.
+    * @param filter
+    *   The web filter to apply to incoming requests, defaults to a filter that allows all requests through.
+    * @param sync
+    *   A boolean flag indicating whether the HTTP server should run synchronously or asynchronously.
+    * @return
+    *   An IO that produces the exit code of the HTTP server.
+    */
   def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
     start(Routes.of(pf, filter), sync)
 
-
-/**
- * Starts an HTTP server that handles requests based on the given routing function,
- * using the `RIO` monad to handle computations that depend on the environment `Env`.
- * @param env the environment required by the routing function.
- * @param pf the partial function that maps requests to `RIO` computations.
- * @param filter the filter to pre-process incoming requests (defaults to a pass-through filter).
- * @param sync whether to use a synchronous or asynchronous I/O model.
- * @return An IO that produces the exit code of the HTTP server.
- */
+  /** Starts an HTTP server that handles requests based on the given routing function, using the `RIO` monad to handle
+    * computations that depend on the environment `Env`.
+    * @param env
+    *   the environment required by the routing function.
+    * @param pf
+    *   the partial function that maps requests to `RIO` computations.
+    * @param filter
+    *   the filter to pre-process incoming requests (defaults to a pass-through filter).
+    * @param sync
+    *   whether to use a synchronous or asynchronous I/O model.
+    * @return
+    *   An IO that produces the exit code of the HTTP server.
+    */
   def startRIO[Env](
       env: Env,
       pf: HttpRouteRIO[Env],
