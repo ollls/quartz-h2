@@ -96,7 +96,19 @@ object QuartzH2Server {
   }
 }
 
-class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLContext) {
+/** Quartz HTTP/2 server.
+  * @param HOST
+  *   the host address of the server
+  * @param PORT
+  *   the port number to bind to
+  * @param h2IdleTimeOutMs
+  *   the maximum idle time in milliseconds before a connection is closed
+  * @param sslCtx
+  *   the SSL context to use for secure connections, can be null for non-secure connections
+  * @param incomingWinSize
+  *   the initial window size for incoming flow control
+  */
+class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLContext, incomingWinSize: Int = 65535) {
 
   val MAX_HTTP_HEADER_SZ = 16384
   val HTTP1_KEEP_ALIVE_MS = 20000
@@ -211,7 +223,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
 
         } else
           (Http2Connection
-            .make(ch, maxStreams, keepAliveMs, route, None)
+            .make(ch, maxStreams, keepAliveMs, route, incomingWinSize, None)
             .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))(_.shutdown)))
 
     } yield ()
@@ -259,7 +271,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       bbuf <- IO(clientPreface.toByteBuffer)
       isOK <- IO(Frames.checkPreface(bbuf))
       c <-
-        if (isOK) Http2Connection.make(ch, maxStreams, keepAliveMs, route, http11request)
+        if (isOK) Http2Connection.make(ch, maxStreams, keepAliveMs, route, incomingWinSize, http11request)
         else
           IO.raiseError(
             new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")

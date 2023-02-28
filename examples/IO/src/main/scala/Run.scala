@@ -104,7 +104,8 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx).startIO(R, filter, sync = false)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx, incomingWinSize = 1048576)
+        .startIO(R, filter, sync = false)
 
     } yield (exitCode)
 
