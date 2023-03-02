@@ -1131,7 +1131,7 @@ class Http2Connection(
                     .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "streamId is 0 for HEADER"))
                     .whenA(streamId == 0)
                   _ <- IO
-                    .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, ""))
+                    .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "stream's Id number is less than previously used Id number"))
                     .whenA(lastStreamId != 0 && lastStreamId > streamId)
                   _ <- IO { lastStreamId = streamId }
 
@@ -1220,7 +1220,7 @@ class Http2Connection(
                   .whenA(t1 != t2)
 
                 _ <- IO
-                  .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "******CON or HEADERS nit finished"))
+                  .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "CON or HEADERS not finished"))
                   .whenA(headersEnded == false)
 
                 b <- hasEnded(streamId)
