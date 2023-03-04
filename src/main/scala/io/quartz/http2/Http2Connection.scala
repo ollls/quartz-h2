@@ -533,7 +533,12 @@ class Http2Connection(
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
 
-      localInboundWindowSize <- Ref[IO].of(65535L)
+      localInboundWindowSize <- Ref[IO].of[Long](INITIAL_WINDOW_SIZE)
+      _ <- sendFrame(Frames.mkWindowUpdateFrame(streamId, INITIAL_WINDOW_SIZE - 65535))
+        .whenA(INITIAL_WINDOW_SIZE > 65535L)
+      _ <- Logger[IO]
+        .debug(s"Send UPDATE WINDOW, streamId = $streamId: ${INITIAL_WINDOW_SIZE - 65535}")
+        .whenA(INITIAL_WINDOW_SIZE > 65535L)
 
       updSyncQ <- Queue.dropping[IO, Unit](1)
       pendingInBytes <- Ref[IO].of(0)
@@ -655,9 +660,9 @@ class Http2Connection(
       _ <- IO(c.contentLenFromDataFrames += dataSize)
 
       localWin_sz <- c.inboundWindow.get
-      _ <- processInboundGlobalFlowControl(streamId, dataSize) >>
-        this.globalInboundWindow.update(_ - dataSize) >>
+      _ <- this.globalInboundWindow.update(_ - dataSize) >>
         this.incrementGlobalPendingInboundData(dataSize) >>
+        processInboundGlobalFlowControl(streamId, dataSize) >>
         c.inboundWindow.update(_ - dataSize) >>
         c.bytesOfPendingInboundData.update(_ + dataSize)
 
@@ -1039,14 +1044,14 @@ class Http2Connection(
     }
   }
 
-  def processIncoming(leftOver: Chunk[Byte]): IO[Unit] = {
-    Logger[IO].trace(s"Http2Connection.processIncoming() leftOver= ${leftOver.size}") >>
-      Http2Connection
-        .makePacketStream(ch, HTTP2_KEEP_ALIVE_MS, leftOver)
-        .foreach(packet => { packet_handler(httpReq11, packet) })
-        .compile
-        .drain
-  }.handleErrorWith[Unit] {
+  def processIncoming(leftOver: Chunk[Byte]): IO[Unit] = (for {
+    _ <- Logger[IO].trace(s"Http2Connection.processIncoming() leftOver= ${leftOver.size}")
+    _ <- Http2Connection
+      .makePacketStream(ch, HTTP2_KEEP_ALIVE_MS, leftOver)
+      .foreach(packet => { packet_handler(httpReq11, packet) })
+      .compile
+      .drain
+  } yield ()).handleErrorWith[Unit] {
     case e @ ErrorGen(streamId, code, name) =>
       Logger[IO].error(s"Http2Connnection.processIncoming() ${e.code} ${name}") >>
         sendFrame(Frames.mkGoAwayFrame(streamId, code, name.getBytes))
@@ -1131,7 +1136,13 @@ class Http2Connection(
                     .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "streamId is 0 for HEADER"))
                     .whenA(streamId == 0)
                   _ <- IO
-                    .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "stream's Id number is less than previously used Id number"))
+                    .raiseError(
+                      ErrorGen(
+                        streamId,
+                        Error.PROTOCOL_ERROR,
+                        "stream's Id number is less than previously used Id number"
+                      )
+                    )
                     .whenA(lastStreamId != 0 && lastStreamId > streamId)
                   _ <- IO { lastStreamId = streamId }
 
@@ -1389,6 +1400,15 @@ class Http2Connection(
 
                       _ <- sendFrame(Frames.makeSettingsFrame(ack = false, this.settings)).whenA(settings_done == false)
                       _ <- sendFrame(Frames.makeSettingsAckFrame())
+
+                      // re-adjust inbound window if exceeds default
+                      _ <- this.globalInboundWindow.set(INITIAL_WINDOW_SIZE)
+                      _ <- sendFrame(Frames.mkWindowUpdateFrame(streamId, INITIAL_WINDOW_SIZE - 65535)).whenA(
+                        INITIAL_WINDOW_SIZE > 65535L
+                      )
+                      _ <- Logger[IO]
+                        .debug(s"Send UPDATE WINDOW global: ${INITIAL_WINDOW_SIZE - 65535}")
+                        .whenA(INITIAL_WINDOW_SIZE > 65535L)
 
                       _ <- IO {
                         if (settings_done == false) settings_done = true
