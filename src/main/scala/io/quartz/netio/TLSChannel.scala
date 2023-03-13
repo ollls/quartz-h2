@@ -372,9 +372,23 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     result.handleErrorWith(_ => IO.unit)
   }
 
+  def ssl_initClent_h2(): IO[Unit] = {
+    for {
+      _ <- f_SSL.setUseClientMode(true)
+      sslParameters <- IO(f_SSL.engine.getSSLParameters())
+      _ <- IO(sslParameters.setApplicationProtocols(Array("h2")))
+      _ <- IO(f_SSL.engine.setSSLParameters(sslParameters))
+      x <- doHandshakeClient()
+      _ <-
+        if (x != FINISHED) {
+          IO.raiseError(
+            new TLSChannelError("TLS Handshake error, plain text connection?")
+          )
+        } else IO.unit
+    } yield ()
+  }
 
-  // Client side SSL Init
-  // for 99% there will be no leftover but under extreme load or upon JVM init it happens
+
   def ssl_initClient(): IO[Unit] = {
     for {
       _ <- f_SSL.setUseClientMode(true)

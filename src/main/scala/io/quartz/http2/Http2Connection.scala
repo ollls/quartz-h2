@@ -63,6 +63,7 @@ object Http2Connection {
 
   def make(
       ch: IOChannel,
+      id : Long,
       maxStreams: Int,
       keepAliveMs: Int,
       httpRoute: Request => IO[Option[Response]],
@@ -93,6 +94,7 @@ object Http2Connection {
       c <- IO(
         new Http2Connection(
           ch,
+          id,
           httpRoute,
           http11Req_ref,
           outq,
@@ -249,6 +251,7 @@ case class Http2Stream(
 
 class Http2Connection(
     ch: IOChannel,
+    id : Long,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
     outq: Queue[IO, ByteBuffer],
@@ -571,7 +574,7 @@ class Http2Connection(
         h <- d.get
         _ <- interceptContentLen(c, h)
         r <- IO(
-          Request(
+          Request( id, streamId, 
             h,
             if ((flags & Flags.END_STREAM) == Flags.END_STREAM)
               Stream.empty
@@ -1421,7 +1424,7 @@ class Http2Connection(
                         val stream = x.stream
                         val th = x.trailingHeaders
                         val h = x.headers.drop("connection")
-                        this.openStream11(1, Request(h, stream, th))
+                        this.openStream11(1, Request(id, 1, h, stream, th))
                       }
                       case None => IO.unit
                     }).whenA(start)
