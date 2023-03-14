@@ -46,6 +46,47 @@ object MyApp extends IOApp {
     } yield (exitCode)
 }
 ```
+
+### Upcoming HTTP2 Server/Client connection managment with onConnect/onDisconnect and connectionTbl.
+
+```scala
+ val connectionTbl = java.util.concurrent.ConcurrentHashMap[Long, Http2ClientConnection](100).asScala
+ ... skip skip 
+  val R: HttpRouteIO = 
+  case req @ GET -> Root / "flow" =>
+      for {
+        ... skip skip
+        //request is another case class which is not shown here
+        conn <- IO(connectionTbl.get(req.connId))
+        response <- conn.doPost( "/v1/token/", fs2.Stream.chunk(Chunk.array(writeToArray(request))), Headers().contentType( ContentType.JSON )
+      )
+      result <- response.bodyAsText
+    } yield (Response.Ok().contentType(ContentType.JSON)).asText(result)
+
+ 
+ def onDisconnect(id: Long) = for {
+    _ <- IO(connectionTbl.get(id).map(c => c.close()))
+    _ <- IO(connectionTbl.remove(id))
+    _ <- Logger[IO].info(
+      s"HttpRouteIO: https://sts.googleapis.com closed for connection Id = $id"
+    )
+  } yield ()
+
+  def onConnect(id: Long) = for {
+    c <- QuartzH2Client.open("https://sts.googleapis.com", tlsBlindTrust = true)
+    _ <- IO(connectionTbl.put(id, c))
+    _ <- Logger[IO].info(
+      s"HttpRouteIO: https://sts.googleapis.com open for connection Id = $id"
+    )
+  } yield ()
+  
+  ...
+  //server with onConnect and onDisconnect handlers
+  exitCode <- new QuartzH2Server( "localhost", 8443, 16000, ctx, onConnect = onConnect, onDisconnect = onDisconnect).startIO(R, sync = false)
+
+```
+
+
 ### Webfilter support with Either[Response, Request]. Provide filter as a parameter QuartzH2Server()
 ```scala
 val filter: WebFilter = (request: Request) =>
