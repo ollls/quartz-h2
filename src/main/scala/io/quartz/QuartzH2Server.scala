@@ -303,9 +303,8 @@ class QuartzH2Server(
   def errorHandler(e: Throwable) = {
     e match {
       case BadProtocol(ch, e) =>
-        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol") >> ch.write(
-          ByteBuffer.wrap(responseStringNo11().getBytes)
-        )
+        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
+        ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
       case e: java.nio.channels.InterruptedByTimeoutException =>
         Logger[IO].info("Remote peer disconnected on timeout")
       case _ => Logger[IO].error("errorHandler: " + e.toString)
