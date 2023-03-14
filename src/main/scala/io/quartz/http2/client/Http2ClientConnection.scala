@@ -568,7 +568,7 @@ class Http2ClientConnection(
 
       code <- IO(h.get(":status").get)
       _ <- Logger[IO].debug(
-        s"Client: Stream Id: $streamId response $code  ${GET.name} $path"
+        s"Client: Stream Id: $streamId response $code  ${method.name} $path"
       )
 
     } yield (ClientResponse(status, h, data_stream))
