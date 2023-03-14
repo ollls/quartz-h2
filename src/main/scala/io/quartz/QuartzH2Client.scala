@@ -58,7 +58,8 @@ object QuartzH2Client {
   private def buildSSLContext(
       protocol: String,
       JKSkeystore: String,
-      password: String
+      password: String,
+      blindTrust: Boolean
   ) = {
     val sslContext: SSLContext = SSLContext.getInstance(protocol)
 
@@ -71,7 +72,7 @@ object QuartzH2Client {
       keyStore
     }
 
-    val trustMgrs = if (JKSkeystore == null) {
+    val trustMgrs = if (blindTrust == true) {
       Array[TrustManager](new X509TrustManager() {
         def getAcceptedIssuers(): Array[X509Certificate] = null
         def checkClientTrusted(c: Array[X509Certificate], a: String): Unit = ()
@@ -110,7 +111,7 @@ object QuartzH2Client {
           IO.blocking(SSLContext.getDefault())
         else
           IO.blocking(
-            buildSSLContext(TLS_PROTOCOL_TAG, trustKeystore, password)
+            buildSSLContext(TLS_PROTOCOL_TAG, trustKeystore, password, blindTrust)
           )
       ch <- IO(
         if (socketGroup == null) AsynchronousSocketChannel.open()
