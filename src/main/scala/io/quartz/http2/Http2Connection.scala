@@ -251,7 +251,7 @@ case class Http2Stream(
 
 class Http2Connection(
     ch: IOChannel,
-    id : Long,
+    val id : Long,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
     outq: Queue[IO, ByteBuffer],

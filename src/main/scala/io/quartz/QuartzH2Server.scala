@@ -108,7 +108,14 @@ object QuartzH2Server {
   * @param incomingWinSize
   *   the initial window size for incoming flow control
   */
-class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLContext, incomingWinSize: Int = 65535) {
+class QuartzH2Server(
+    HOST: String,
+    PORT: Int,
+    h2IdleTimeOutMs: Int,
+    sslCtx: SSLContext,
+    incomingWinSize: Int = 65535,
+    onDisconnect: Long => IO[Unit] = _ => IO.unit
+) {
 
   val MAX_HTTP_HEADER_SZ = 16384
   val HTTP1_KEEP_ALIVE_MS = 20000
@@ -226,7 +233,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         } else
           (Http2Connection
             .make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, None)
-            .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))(_.shutdown)))
+            .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))( c => onDisconnect( c.id ) >> c.shutdown)))
 
     } yield ()
 
@@ -279,7 +286,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
           IO.raiseError(
             new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")
           )
-      _ <- IO(c).bracket(c => c.processIncoming(clientPreface.drop(PrefaceString.length)))(_.shutdown)
+      _ <- IO(c).bracket(c => c.processIncoming(clientPreface.drop(PrefaceString.length)))( c => onDisconnect( c.id ) >> c.shutdown)
     } yield ()
     R.void
   }
@@ -439,7 +446,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         .flatMap(ch =>
           (IO(ch)
             .bracket(ch =>
-              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                errorHandler(e)
+              })
             )(ch => ch.close())
             .start)
         )
@@ -479,7 +488,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         .flatMap(ch =>
           IO(ch)
             .bracket(ch =>
-              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                errorHandler(e)
+              })
             )(_.close())
             .start
         )
