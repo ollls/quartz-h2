@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
- package io.quartz.http2
+package io.quartz.http2
 
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -41,15 +41,21 @@ class HeaderEncoder(initialMaxTableSize: Int) {
     encoder.setMaxHeaderTableSize(os, max)
 
   /** Encode the headers into the payload of a HEADERS frame */
-  def encodeHeaders(hs: Headers): ByteBuffer = {  //hSem used
+  def encodeHeaders(hs: Headers): ByteBuffer = { // hSem used
+
     hs.foreach { case (k, v) =>
       val keyBytes = k.toLowerCase().getBytes(US_ASCII)
       val valueBytes = v.getBytes(US_ASCII)
-      encoder.encodeHeader(os, keyBytes, valueBytes, false)
+      if (keyBytes(0) == ':')
+        encoder.encodeHeader(os, keyBytes, valueBytes, false)
     }
-
+    hs.foreach { case (k, v) =>
+      val keyBytes = k.toLowerCase().getBytes(US_ASCII)
+      val valueBytes = v.getBytes(US_ASCII)
+      if (keyBytes(0) != ':')
+        encoder.encodeHeader(os, keyBytes, valueBytes, false)
+    }
     val buff = ByteBuffer.wrap(os.toByteArray())
-
     os.reset()
     buff
   }
@@ -71,19 +77,30 @@ class HeaderDecoder(maxHeaderListSize: Int, val maxTableSize: Int) {
   private[this] var regularHeaderWasAdded = false
 
   private[this] val listener = new HeaderListener {
-    override def addHeader(name: Array[Byte], value: Array[Byte], sensitive: Boolean): Unit = {
+    override def addHeader(
+        name: Array[Byte],
+        value: Array[Byte],
+        sensitive: Boolean
+    ): Unit = {
 
       val name_s = new String(name, US_ASCII)
       val value_s = new String(value, US_ASCII)
 
-      if ( name_s.startsWith( ":" ) == false ) regularHeaderWasAdded = true
-      else if( regularHeaderWasAdded == true  ) throw new Exception("An attempt to add pseudo header after a regular header")
+      if (name_s.startsWith(":") == false) regularHeaderWasAdded = true
+      else if (regularHeaderWasAdded == true)
+        throw new Exception(
+          "An attempt to add pseudo header after a regular header"
+        )
+
+      // System.out.println(new String(name, US_ASCII) + " ------> " + new String(value, US_ASCII))
 
       headerBlockSize += 32 + name.length + value.length // implement size check!!!!
       headers = headers + (name_s -> value_s)
 
       if (headerBlockSize > maxHeaderListSize)
-        throw new Exception("HTTP2 settings value MAX_HEADER_LIST_SIZE exceeded limit")
+        throw new Exception(
+          "HTTP2 settings value MAX_HEADER_LIST_SIZE exceeded limit"
+        )
 
     }
   }
@@ -109,7 +126,10 @@ class HeaderDecoder(maxHeaderListSize: Int, val maxTableSize: Int) {
   }
 
   // simplified version ByteBuffer always has concatanated headers from headers and cont packets.
-  private[this] def doDecodeHeaders(buffer: Seq[ByteBuffer], leftOver: ByteBuffer): Unit = {
+  private[this] def doDecodeHeaders(
+      buffer: Seq[ByteBuffer],
+      leftOver: ByteBuffer
+  ): Unit = {
 
     buffer match {
       case head :: next => {

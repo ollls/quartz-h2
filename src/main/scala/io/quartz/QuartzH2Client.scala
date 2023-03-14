@@ -121,20 +121,17 @@ object QuartzH2Client {
       tls_ch <- IO(new TLSChannel(ssl_ctx, ch)).flatTap(c =>
         c.ssl_initClent_h2()
       )
-
-      _ <- IO.println(tls_ch.f_SSL.engine.getApplicationProtocol())
     } yield (tls_ch)
     T
   }
 
   private def connect(
-      url: String,
+      u: URI,
       tlsBlindTrust: Boolean = false,
       trustKeystore: String = null,
       password: String = "",
       socketGroup: AsynchronousChannelGroup = null
   ): IO[IOChannel] = {
-    val u = new URI(url)
     val port = if (u.getPort == -1) 443 else u.getPort
     if (u.getScheme().equalsIgnoreCase("https")) {
       connectTLS_alpn_h2(
@@ -161,13 +158,14 @@ object QuartzH2Client {
       password: String = "",
       socketGroup: AsynchronousChannelGroup = null
   ): IO[Http2ClientConnection] = for {
+    u <- IO(new URI(hostURI))
     io_ch <- QuartzH2Client.connect(
-      hostURI,
+      u,
       tlsBlindTrust,
       trustKeystore,
       password
     )
-    c_h <- Http2ClientConnection.make(io_ch, incomingWindowSize)
+    c_h <- Http2ClientConnection.make(io_ch, u, incomingWindowSize)
     settings <- c_h.H2_ClientConnect()
   } yield (c_h)
 
