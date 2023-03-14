@@ -107,6 +107,10 @@ object QuartzH2Server {
   *   the SSL context to use for secure connections, can be null for non-secure connections
   * @param incomingWinSize
   *   the initial window size for incoming flow control
+  * @param onConnect 
+  *   callback function that is called when a connection is established, provides connectionId : Long as an argument
+  * @param onDisconnect
+  *   callback function that is called when a connection is terminated, provides connectionId : Long as an argument
   */
 class QuartzH2Server(
     HOST: String,
