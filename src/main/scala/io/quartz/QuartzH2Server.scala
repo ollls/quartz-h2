@@ -114,6 +114,7 @@ class QuartzH2Server(
     h2IdleTimeOutMs: Int,
     sslCtx: SSLContext,
     incomingWinSize: Int = 65535,
+    onConnect: Long => IO[Unit] = _ => IO.unit,
     onDisconnect: Long => IO[Unit] = _ => IO.unit
 ) {
 
@@ -233,7 +234,12 @@ class QuartzH2Server(
         } else
           (Http2Connection
             .make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, None)
-            .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))( c => onDisconnect( c.id ) >> c.shutdown)))
+            .flatMap(c =>
+              IO(c)
+                .bracket(c => onConnect(c.id) >> c.processIncoming(buf.drop(PrefaceString.length)))(c =>
+                  onDisconnect(c.id) >> c.shutdown
+                )
+            ))
 
     } yield ()
 
@@ -286,7 +292,9 @@ class QuartzH2Server(
           IO.raiseError(
             new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")
           )
-      _ <- IO(c).bracket(c => c.processIncoming(clientPreface.drop(PrefaceString.length)))( c => onDisconnect( c.id ) >> c.shutdown)
+      _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(clientPreface.drop(PrefaceString.length)))(c =>
+        onDisconnect(c.id) >> c.shutdown
+      )
     } yield ()
     R.void
   }
