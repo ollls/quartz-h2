@@ -47,7 +47,7 @@ object MyApp extends IOApp {
 }
 ```
 
-### Upcoming HTTP2 Http2ClientConnection with onConnect/onDisconnect and connectionTbl.
+### Http2ClientConnection with onConnect/onDisconnect and connectionTbl.
 
 ```scala
  val connectionTbl = java.util.concurrent.ConcurrentHashMap[Long, Http2ClientConnection](100).asScala
