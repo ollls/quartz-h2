@@ -9,7 +9,6 @@ Direct native translation of fs2 stream chunks into http2 packets. Tested and op
 ```
 "io.github.ollls" %% "quartz-h2" % "0.3.0"
 ```
-
 to start server example with IO
 ```
 sbt IO/run
