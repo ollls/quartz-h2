@@ -11,21 +11,21 @@ import java.net.URI
  * @param stream          a stream of request body bytes
  * @param trailingHeaders deferred trailing headers
  */
-sealed case class Request(headers: Headers, stream: Stream[IO, Byte], trailingHeaders: Deferred[IO, Headers]) {
+sealed case class Request( connId : Long, streamId: Int, headers: Headers, stream: Stream[IO, Byte], trailingHeaders: Deferred[IO, Headers]) {
   /**
    * Adds the specified headers to the request headers.
    *
    * @param hdr the headers to add
    * @return a new request with the additional headers
    */
-  def hdr(hdr: Headers): Request = new Request(headers ++ hdr, this.stream, this.trailingHeaders)
+  def hdr(hdr: Headers): Request = new Request(connId, streamId, headers ++ hdr, this.stream, this.trailingHeaders)
   /**
    * Adds the specified header pair to the request headers.
    *
    * @param pair a tuple containing the header name and value
    * @return a new request with the additional header pair
    */
-  def hdr(pair: (String, String)): Request = new Request(headers + pair, this.stream, this.trailingHeaders)
+  def hdr(pair: (String, String)): Request = new Request(connId, streamId, headers + pair, this.stream, this.trailingHeaders)
   /**
    * Returns the path component of the request URI.
    *

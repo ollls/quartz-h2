@@ -1,6 +1,6 @@
 package io.quartz
 
-import cats.effect.{IO, IOApp, Deferred, ExitCode}
+import cats.effect.{IO, IOApp, Ref, Deferred, ExitCode}
 
 import fs2.{Stream, Chunk, Pull}
 import fs2.text
@@ -107,8 +107,20 @@ object QuartzH2Server {
   *   the SSL context to use for secure connections, can be null for non-secure connections
   * @param incomingWinSize
   *   the initial window size for incoming flow control
+  * @param onConnect 
+  *   callback function that is called when a connection is established, provides connectionId : Long as an argument
+  * @param onDisconnect
+  *   callback function that is called when a connection is terminated, provides connectionId : Long as an argument
   */
-class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLContext, incomingWinSize: Int = 65535) {
+class QuartzH2Server(
+    HOST: String,
+    PORT: Int,
+    h2IdleTimeOutMs: Int,
+    sslCtx: SSLContext,
+    incomingWinSize: Int = 65535,
+    onConnect: Long => IO[Unit] = _ => IO.unit,
+    onDisconnect: Long => IO[Unit] = _ => IO.unit
+) {
 
   val MAX_HTTP_HEADER_SZ = 16384
   val HTTP1_KEEP_ALIVE_MS = 20000
@@ -204,12 +216,14 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
 
   def doConnect(
       ch: IOChannel,
+      idRef: Ref[IO, Long],
       maxStreams: Int,
       keepAliveMs: Int,
       route: Request => IO[Option[Response]],
       leftOver: Chunk[Byte] = Chunk.empty[Byte]
   ): IO[Unit] = {
     for {
+      id <- idRef.get
       buf <-
         if (leftOver.size > 0) IO(leftOver) else ch.read(HTTP1_KEEP_ALIVE_MS)
       test <- IO(buf.take(PrefaceString.length))
@@ -219,12 +233,17 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       _ <-
         if (isOK == false) {
 
-          doConnectUpgrade(ch, maxStreams, keepAliveMs, route, buf)
+          doConnectUpgrade(ch, id, maxStreams, keepAliveMs, route, buf)
 
         } else
           (Http2Connection
-            .make(ch, maxStreams, keepAliveMs, route, incomingWinSize, None)
-            .flatMap(c => IO(c).bracket(c => c.processIncoming(buf.drop(PrefaceString.length)))(_.shutdown)))
+            .make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, None)
+            .flatMap(c =>
+              IO(c)
+                .bracket(c => onConnect(c.id) >> c.processIncoming(buf.drop(PrefaceString.length)))(c =>
+                  onDisconnect(c.id) >> c.shutdown
+                )
+            ))
 
     } yield ()
 
@@ -232,6 +251,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
 
   def doConnectUpgrade(
       ch: IOChannel,
+      id: Long,
       maxStreams: Int,
       keepAliveMs: Int,
       route: Request => IO[Option[Response]],
@@ -256,7 +276,7 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
 
       emptyTH <- Deferred[IO, Headers] // no trailing headers for 1.1
       _ <- emptyTH.complete(Headers()) // complete with empty
-      http11request <- IO(Some(Request(headers11, res, emptyTH)))
+      http11request <- IO(Some(Request(id, 1, headers11, res, emptyTH)))
       upd = headers11.get("upgrade").getOrElse("")
       _ <- Logger[IO].trace("doConnectUpgrade() - Upgrade = " + upd)
       clientPreface <-
@@ -271,12 +291,14 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       bbuf <- IO(clientPreface.toByteBuffer)
       isOK <- IO(Frames.checkPreface(bbuf))
       c <-
-        if (isOK) Http2Connection.make(ch, maxStreams, keepAliveMs, route, incomingWinSize, http11request)
+        if (isOK) Http2Connection.make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, http11request)
         else
           IO.raiseError(
             new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")
           )
-      _ <- IO(c).bracket(c => c.processIncoming(clientPreface.drop(PrefaceString.length)))(_.shutdown)
+      _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(clientPreface.drop(PrefaceString.length)))(c =>
+        onDisconnect(c.id) >> c.shutdown
+      )
     } yield ()
     R.void
   }
@@ -285,9 +307,8 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
   def errorHandler(e: Throwable) = {
     e match {
       case BadProtocol(ch, e) =>
-        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol") >> ch.write(
-          ByteBuffer.wrap(responseStringNo11().getBytes)
-        )
+        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
+        ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
       case e: java.nio.channels.InterruptedByTimeoutException =>
         Logger[IO].info("Remote peer disconnected on timeout")
       case _ => Logger[IO].error("errorHandler: " + e.toString)
@@ -373,6 +394,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       _ <- Logger[IO].info(
         s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}"
       )
+
+      conId <- Ref[IO].of(0L)
+
       group <- IO(
         AsynchronousChannelGroup.withThreadPool(e)
       )
@@ -391,8 +415,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         .flatMap(ch =>
           (IO(TLSChannel(sslCtx, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
+            .flatTap(_ => conId.update(_ + 1))
             .bracket(ch =>
-              doConnect(ch._1, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => { errorHandler(e) })
+              doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => { errorHandler(e) })
             )(ch => ch._1.close())
             .handleErrorWith(e => { errorHandler(e) >> ch.close() })
             .start)
@@ -408,9 +433,8 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 ( sync - Java Socket )")
       _ <- Logger[IO].info(s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}")
 
-      // sslCtx
+      conId <- Ref[IO].of(0L)
 
-      // server_ch <- IO(new ServerSocket(PORT, 0, addr.getAddress))
       server_ch <- IO(
         sslCtx.getServerSocketFactory().createServerSocket(PORT, 0, addr.getAddress()).asInstanceOf[SSLServerSocket]
       )
@@ -429,10 +453,13 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
         .flatMap(c => IO(new SocketChannel(c)))
         .flatTap(c => Logger[IO].info(s"Connect from remote peer: ${c.socket.getInetAddress().toString()}"))
       _ <- accept
+        .flatTap(_ => conId.update(_ + 1))
         .flatMap(ch =>
           (IO(ch)
             .bracket(ch =>
-              doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                errorHandler(e)
+              })
             )(ch => ch.close())
             .start)
         )
@@ -453,6 +480,9 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
       group <- IO(
         AsynchronousChannelGroup.withThreadPool(e)
       )
+
+      conId <- Ref[IO].of(0L)
+
       server_ch <- IO(
         group.provider().openAsynchronousServerSocketChannel(group).bind(addr)
       )
@@ -465,10 +495,13 @@ class QuartzH2Server(HOST: String, PORT: Int, h2IdleTimeOutMs: Int, sslCtx: SSLC
           )
         )
       _ <- accept
+        .flatTap(_ => conId.update(_ + 1))
         .flatMap(ch =>
           IO(ch)
             .bracket(ch =>
-              doConnect(ch, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => { errorHandler(e) })
+              doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                errorHandler(e)
+              })
             )(_.close())
             .start
         )
