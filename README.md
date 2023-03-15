@@ -126,11 +126,7 @@ val filter: WebFilter = (request: Request) =>
         .contentType(ContentType.contentTypeFromFileName(FILE)))
       } 
 ```
-### HTTP Multipart.
-```scala
-    case req @ POST -> Root / "mpart" =>
-      MultiPart.writeAll(req, HOME_DIR ) *> IO(Response.Ok())
-```
+
 ### Web site service.
 ```scala
     //your web site files in the folder "web" under web_root.    
