@@ -3,7 +3,7 @@
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.0(client)-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.0/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 
-# 100% asyncronous Java NIO based implementation of **http/2 only** packet streaming server with TLS encryption implemented as scala CATS effects.
+# Asyncronous Java NIO based implementation of **http/2 only** packet streaming server and client with TLS encryption implemented as scala CATS effects.
 
 Direct native translation of fs2 stream chunks into http2 packets. Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons. 
 
