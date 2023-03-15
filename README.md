@@ -46,7 +46,7 @@ object MyApp extends IOApp {
 
 ### Http2ClientConnection with jsoniter. 
 
-onConnect()/onDisconnect(), connectionTbl used to manage client connections.
+onConnect()/onDisconnect(), connectionTbl used to manage client HTTP/2 connection lifecycle.
 
 ```scala
  val connectionTbl = java.util.concurrent.ConcurrentHashMap[Long, Http2ClientConnection](100).asScala
