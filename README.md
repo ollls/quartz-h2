@@ -1,6 +1,7 @@
 
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.0-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.0/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
+![quartz-h2](quartz-h2.jpeg)
 
 # Asyncronous Java NIO based implementation of **http/2 only** packet streaming server and client with TLS encryption implemented as scala CATS effects.
 
