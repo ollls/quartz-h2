@@ -155,7 +155,7 @@ object Http2Connection {
       updWin = if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW
       _ <-
         if (updWin > WINDOW * 0.7 && localWin < WINDOW * 0.3) {
-          Logger[IO].trace(s"Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin") >> c
+          Logger[IO].debug(s"Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin") >> c
             .sendFrame(Frames.mkWindowUpdateFrame(streamId, if (updWin > 0) updWin else WINDOW)) >>
             stream.inboundWindow.update(_ + updWin)
         } else {
