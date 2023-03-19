@@ -69,7 +69,7 @@ object Frames {
       settings: Http2Settings
   ): ByteBuffer = {
 
-    val payloadSize = 2 * 6
+    val payloadSize = 3 * 6
     val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
     val flags = if (ack) Flags.ACK.toInt else 0x0
 
@@ -80,6 +80,10 @@ object Frames {
     buffer
       .putShort(SettingsTypes.INITIAL_WINDOW_SIZE)
       .putInt(settings.INITIAL_WINDOW_SIZE)
+
+    buffer
+      .putShort(SettingsTypes.MAX_CONCURRENT_STREAMS)
+      .putInt(100)
 
     buffer.flip()
     buffer

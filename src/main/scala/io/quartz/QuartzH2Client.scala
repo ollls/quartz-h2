@@ -27,16 +27,12 @@ object QuartzH2Client {
   def apply(
       hostURI: String,
       incomingWindowSize: Int = 65535,
-      tlsBlindTrust: Boolean = false,
-      trustKeystore: String = null,
-      password: String = "",
+      ctx: SSLContext,
       socketGroup: AsynchronousChannelGroup = null
   ): IO[Http2ClientConnection] = open(
     hostURI,
     incomingWindowSize,
-    tlsBlindTrust,
-    trustKeystore,
-    password,
+    ctx,
     socketGroup
   )
 
@@ -55,7 +51,7 @@ object QuartzH2Client {
     keystore;
   }
 
-  private def buildSSLContext(
+  def buildSSLContext(
       protocol: String,
       JKSkeystore: String,
       password: String,
@@ -100,37 +96,24 @@ object QuartzH2Client {
       host: String,
       port: Int,
       socketGroup: AsynchronousChannelGroup,
-      blindTrust: Boolean = false,
-      trustKeystore: String = null,
-      password: String = ""
+      ctx: SSLContext
   ): IO[TLSChannel] = {
     val T = for {
       address <- IO(new java.net.InetSocketAddress(host, port))
-      ssl_ctx <-
-        if (trustKeystore == null && blindTrust == false)
-          IO.blocking(SSLContext.getDefault())
-        else
-          IO.blocking(
-            buildSSLContext(TLS_PROTOCOL_TAG, trustKeystore, password, blindTrust)
-          )
       ch <- IO(
         if (socketGroup == null) AsynchronousSocketChannel.open()
         else AsynchronousSocketChannel.open(socketGroup)
       )
 
       ch <- TCPChannel.connect(host, port, socketGroup)
-      tls_ch <- IO(new TLSChannel(ssl_ctx, ch)).flatTap(c =>
-        c.ssl_initClent_h2()
-      )
+      tls_ch <- IO(new TLSChannel(ctx, ch)).flatTap(c => c.ssl_initClent_h2())
     } yield (tls_ch)
     T
   }
 
   private def connect(
       u: URI,
-      tlsBlindTrust: Boolean = false,
-      trustKeystore: String = null,
-      password: String = "",
+      ctx: SSLContext,
       socketGroup: AsynchronousChannelGroup = null
   ): IO[IOChannel] = {
     val port = if (u.getPort == -1) 443 else u.getPort
@@ -139,9 +122,7 @@ object QuartzH2Client {
         u.getHost(),
         port,
         socketGroup,
-        tlsBlindTrust,
-        trustKeystore,
-        password
+        ctx
       )
     } else if (u.getScheme().equalsIgnoreCase("http")) {
       TCPChannel.connect(u.getHost(), port, socketGroup)
@@ -154,17 +135,13 @@ object QuartzH2Client {
   def open(
       hostURI: String,
       incomingWindowSize: Int = 65535,
-      tlsBlindTrust: Boolean = false,
-      trustKeystore: String = null,
-      password: String = "",
+      ctx: SSLContext,
       socketGroup: AsynchronousChannelGroup = null
   ): IO[Http2ClientConnection] = for {
     u <- IO(new URI(hostURI))
     io_ch <- QuartzH2Client.connect(
       u,
-      tlsBlindTrust,
-      trustKeystore,
-      password
+      ctx
     )
     c_h <- Http2ClientConnection.make(io_ch, u, incomingWindowSize)
     settings <- c_h.H2_ClientConnect()

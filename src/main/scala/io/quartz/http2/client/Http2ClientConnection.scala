@@ -1,6 +1,5 @@
 package io.quartz.http2
 
-import java.net.URI
 import io.quartz.netio.IOChannel
 import cats.effect.IO
 import fs2.Chunk
@@ -23,6 +22,7 @@ import cats.implicits._
 import cats.syntax.all._
 import io.quartz.http2.model.StatusCode
 import concurrent.duration.DurationInt
+import java.net.URI
 
 case class ClientResponse(
     status: StatusCode,
@@ -47,22 +47,19 @@ object Http2ClientConnection {
   def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
     bb <- outq.take
     _ <- ch.write(bb)
-  } yield ()).handleErrorWith(e => Logger[IO].error(e.toString()))
+  } yield ()).handleErrorWith(e => Logger[IO].error("Client: " + e.toString()))
 
-  /** Reads data from the given IOChannel and processes it with the
-    * packet_handler. This function reads data from the IOChannel in chunks
-    * representing Http2 packets, converts them to packets using the
-    * makePacketStream function, and processes each packet with the
-    * packet_handler.
+  /** Reads data from the given IOChannel and processes it with the packet_handler. This function reads data from the
+    * IOChannel in chunks representing Http2 packets, converts them to packets using the makePacketStream function, and
+    * processes each packet with the packet_handler.
     * @param ch
     *   the IOChannel to read data from
     * @return
     *   a Fiber that represents the running computation
     */
-  def make(ch: IOChannel, uri : URI, incomingWindowSize: Int = 65535) = {
+  def make(ch: IOChannel, uri: URI, incomingWindowSize: Int = 65535) = {
     for {
       outq <- Queue.bounded[IO, ByteBuffer](1)
-
       f0 <- outBoundWorker(ch, outq).foreverM.start
       refEncoder <- Ref[IO].of[HeaderEncoder](null)
       refDecoder <- Ref[IO].of[HeaderDecoder](null)
@@ -288,7 +285,9 @@ class Http2ClientConnection(
       .foreach(p => packet_handler(p))
       .compile
       .drain
-      .handleErrorWith(e => dropStreams())
+      .handleErrorWith(e => {
+        Logger[IO].error("Client: " + e.toString()) >> dropStreams()
+      })
 
   def dropStreams() = for {
     streams <- IO(this.streamTbl.values.toList)
@@ -357,22 +356,28 @@ class Http2ClientConnection(
         case FrameTypes.DATA => accumData(streamId, packet0, len)
 
         case FrameTypes.SETTINGS =>
-          (for {
-            current_size <- settings1.get.map(settings =>
-              settings.INITIAL_WINDOW_SIZE
-            )
-            res <- IO(Http2Settings.fromSettingsArray(buffer, len))
-            _ <- settings1.set(res)
-            _ <- awaitSettings.complete(true)
-            _ <- upddateInitialWindowSizeAllStreams(
-              current_size,
-              res.INITIAL_WINDOW_SIZE
-            )
-          } yield ()).whenA(Flags.ACK(flags) == false)
+          // IO.println("ACK CAME").whenA(Flags.ACK(flags) == true) >>
+          // sendFrame(Frames.makeSettingsAckFrame()).whenA(Flags.ACK(flags) == true) >>
+          // sendFrame(Frames.mkPingFrame( false, Array[Byte]( 0,0,0,0,0,0,0,0))).whenA(Flags.ACK(flags) == true) >>
+          awaitSettings.complete(true).whenA(Flags.ACK(flags) == true) >>
+            (for {
+              current_size <- settings1.get.map(settings => settings.INITIAL_WINDOW_SIZE)
+              res <- IO(Http2Settings.fromSettingsArray(buffer, len))
+
+              _ <- settings1.set(res)
+              _ <- upddateInitialWindowSizeAllStreams(
+                current_size,
+                res.INITIAL_WINDOW_SIZE
+              )
+              // _ <- sendFrame(Frames.makeSettingsAckFrame())
+              // _ <- awaitSettings.complete(true)
+            } yield ()).whenA(Flags.ACK(flags) == false)
 
         case FrameTypes.WINDOW_UPDATE => {
           val increment = buffer.getInt() & Masks.INT31
-          Logger[IO].debug(s"Client: WINDOW_UPDATE $increment $streamId") >> this
+          Logger[IO].debug(
+            s"Client: WINDOW_UPDATE $increment $streamId"
+          ) >> this
             .updateWindow(streamId, increment)
             .handleErrorWith[Unit] {
               case e @ ErrorRst(streamId, code, name) =>
@@ -416,12 +421,11 @@ class Http2ClientConnection(
     _ <- inBoundWorker(ch).start // init incoming packet reader
     _ <- ch.write(Constants.getPrefaceBuffer())
 
-    s <- IO(Http2Settings()).flatTap(s =>
-      IO { s.INITIAL_WINDOW_SIZE = INITIAL_WINDOW_SIZE }
-    )
-    _ <- sendFrame(
-      Frames.makeSettingsFrameClient(ack = false, s)
-    )
+    s <- IO(Http2Settings()).flatTap(s => IO { s.INITIAL_WINDOW_SIZE = INITIAL_WINDOW_SIZE })
+
+    _ <- sendFrame(Frames.makeSettingsFrameClient(ack = false, s))
+
+    _ <- sendFrame(Frames.makeSettingsAckFrame())
 
     win_sz <- inboundWindow.get
 
@@ -432,8 +436,6 @@ class Http2ClientConnection(
 
     _ <- awaitSettings.get
     settings <- settings1.get
-
-    _ <- sendFrame(Frames.makeSettingsAckFrame())
 
     _ <- headerEncoderRef.set(new HeaderEncoder(settings.HEADER_TABLE_SIZE))
     _ <- headerDecoderRef.set(
@@ -480,21 +482,17 @@ class Http2ClientConnection(
       h0: Headers = Headers()
   ): IO[ClientResponse] = {
     val h1 =
-      h0 + (":path" -> path) + (":method" -> method.name) + (":scheme" -> uri.getScheme()) + (":authority" -> uri.getAuthority())
+      h0 + (":path" -> path) + (":method" -> method.name) + (":scheme" -> uri
+        .getScheme()) + (":authority" -> uri
+        .getAuthority())
 
     val endStreamInHeaders = if (s0 == Stream.empty) true else false
-
-    // val requestIO = for {
-    //  emptyTH <- Deferred[IO, Headers]
-    //  _ <- emptyTH.complete(Headers()) // complete with empty
-    // } yield (Request(h1, s0, emptyTH))
 
     for {
       _ <- awaitSettings.get
       settings <- settings1.get
       headerEncoder <- headerEncoderRef.get
       // HEADERS /////
-      // req <- requestIO
       stream <- hSem.acquire.bracket { _ =>
         for {
           streamId <- streamIdRef.getAndUpdate(_ + 2)
@@ -547,7 +545,9 @@ class Http2ClientConnection(
         .void
       // END OF DATA /////
 
-      _ <- Logger[IO].trace(s"Stream Id: $streamId ${method.name} $path")
+      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId ${GET.name} $path")
+      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId request headers: ${h1.printHeaders(" | ")})")
+
       // wait for response
       pair <- stream.d.get
       _ <- IO
@@ -555,7 +555,9 @@ class Http2ClientConnection(
         .whenA(pair == null)
       flags = pair._1
       h = pair._2
-      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId header received from remote")
+      _ <- Logger[IO].trace(
+        s"Client: Stream Id: $streamId header received from remote"
+      )
 
       status <- IO(h.get(":status") match {
         case None        => StatusCode.InternalServerError
@@ -568,8 +570,10 @@ class Http2ClientConnection(
 
       code <- IO(h.get(":status").get)
       _ <- Logger[IO].debug(
-        s"Client: Stream Id: $streamId response $code  ${method.name} $path"
+        s"Client: Stream Id: $streamId response $code  ${GET.name} $path"
       )
+
+      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId response headers: ${h.printHeaders(" | ")})")
 
     } yield (ClientResponse(status, h, data_stream))
   }
@@ -583,9 +587,8 @@ class Http2ClientConnection(
 
   /** Generate stream header frames from the provided header sequence
     *
-    * If the compressed representation of the headers exceeds the MAX_FRAME_SIZE
-    * setting of the peer, it will be broken into a HEADERS frame and a series
-    * of CONTINUATION frames.
+    * If the compressed representation of the headers exceeds the MAX_FRAME_SIZE setting of the peer, it will be broken
+    * into a HEADERS frame and a series of CONTINUATION frames.
     */
   //////////////////////////////
   private[this] def headerFrame( // TODOD pbly not working for multi-packs
@@ -689,9 +692,7 @@ class Http2ClientConnection(
         if (INITIAL_WINDOW_SIZE > pending_sz) INITIAL_WINDOW_SIZE - pending_sz
         else INITIAL_WINDOW_SIZE
       _ <-
-        if (
-          updWin > INITIAL_WINDOW_SIZE * 0.7 && localWin < INITIAL_WINDOW_SIZE * 0.3
-        ) {
+        if (updWin > INITIAL_WINDOW_SIZE * 0.7 && localWin < INITIAL_WINDOW_SIZE * 0.3) {
           Logger[IO].trace(
             s"Client: Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin"
           ) >> c
@@ -732,9 +733,7 @@ class Http2ClientConnection(
         continue // true if flags has no end stream
       }
 
-    dataStream0.flatMap(b =>
-      Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array())
-    )
+    dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array()))
   }
 
   private[this] def processInboundGlobalFlowControl(
@@ -828,9 +827,7 @@ class Http2ClientConnection(
     Logger[IO].info(
       s"Client: Http2Connection.upddateInitialWindowSize( $currentWinSize, $newWinSize)"
     ) >>
-      stream.transmitWindow.update(txBytesLeft =>
-        newWinSize - (currentWinSize - txBytesLeft)
-      ) >> stream.outXFlowSync
+      stream.transmitWindow.update(txBytesLeft => newWinSize - (currentWinSize - txBytesLeft)) >> stream.outXFlowSync
         .offer(())
   }
 
@@ -840,13 +837,9 @@ class Http2ClientConnection(
   ) = {
     Logger[IO].trace(
       s"Client: Http2Connection.upddateInitialWindowSizeAllStreams($currentSize, $newSize)"
-    ) >> this.transmitWindow.update(txBytesLeft =>
-      newSize - (currentSize - txBytesLeft)
-    ) >>
+    ) >> this.transmitWindow.update(txBytesLeft => newSize - (currentSize - txBytesLeft)) >>
       streamTbl.values.toSeq
-        .traverse(stream =>
-          updateInitiallWindowSize(stream, currentSize, newSize)
-        )
+        .traverse(stream => updateInitiallWindowSize(stream, currentSize, newSize))
         .void
   }
 
@@ -889,8 +882,7 @@ class Http2ClientConnection(
 
   /** Generate stream data frame(s) for the specified data
     *
-    * If the data exceeds the peers MAX_FRAME_SIZE setting, it is fragmented
-    * into a series of frames.
+    * If the data exceeds the peers MAX_FRAME_SIZE setting, it is fragmented into a series of frames.
     */
   def dataFrame(
       streamId: Int,
@@ -925,7 +917,7 @@ class Http2ClientConnection(
     for {
       t <- IO(parseFrame(bb))
       len = t._1
-      _ <- Logger[IO].trace(s"sendDataFrame() - $len bytes")
+      _ <- Logger[IO].trace(s"Client: sendDataFrame() - $len bytes")
       opt_D <- IO(streamTbl.get(streamId))
       _ <- opt_D match {
         case Some(ce) =>
@@ -939,7 +931,15 @@ class Http2ClientConnection(
   private[this] def updateAndCheckGlobalTx(streamId: Int, inc: Int) = {
     for {
       _ <- transmitWindow.update(_ + inc)
+
       rs <- transmitWindow.get
+      // murky issue when cloudfromt servers sends 2147483648 and max int 2147483647
+      // h2spect requires dynamic realoc for INITIAL_WINDOW_SIZE ( I will double check on that one)
+      // and peps on stackoverflow say that only UPDATE_WINDOW can change that and INITIAL_WINDOW_SIZE is simply ignored !!??
+      // cloudfront sends 65536 instead of 65535 !
+      // transmit Windows here made as Long, so we have a luxury not to worry much for now
+      // commented out temporary?
+      /*
       _ <- IO
         .raiseError(
           ErrorGen(
@@ -948,7 +948,7 @@ class Http2ClientConnection(
             "Sends multiple WINDOW_UPDATE frames increasing the flow control window to above 2^31-1"
           )
         )
-        .whenA(rs >= Integer.MAX_VALUE)
+        .whenA(rs > Integer.MAX_VALUE)*/
     } yield ()
   }
 
@@ -967,6 +967,13 @@ class Http2ClientConnection(
                                   for {
                                     _ <- stream.transmitWindow.update(_ + inc)
                                     rs <- stream.transmitWindow.get
+                                    // murky issue when cloudfromt servers sends 2147483648 and max int 2147483647
+                                    // h2spect requires dynamic realoc for INITIAL_WINDOW_SIZE ( I will double check on that one)
+                                    // and peps on stackoverflow say that only UPDATE_WINDOW can change that and INITIAL_WINDOW_SIZE is simply ignored !!??
+                                    // cloudfront sends 65536 instead of 65535 !
+                                    // transmit Windows here made as Long, so we have a luxury not to worry much for now
+                                    // commented out temporary?
+                                    /*
                                     _ <- IO
                                       .raiseError(
                                         ErrorGen(
@@ -975,7 +982,7 @@ class Http2ClientConnection(
                                           "Sends multiple WINDOW_UPDATE frames increasing the flow control window to above 2^31-1"
                                         )
                                       )
-                                      .whenA(rs >= Integer.MAX_VALUE)
+                                      .whenA(rs > Integer.MAX_VALUE)*/
                                     _ <- stream.outXFlowSync.offer(())
                                   } yield ()
                                 )
