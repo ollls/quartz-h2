@@ -1,7 +1,7 @@
 
 <img src="quartz-h2.jpeg" width="84" title="quartz-h2"/>
 
-[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.0-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.0/)
+[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.1/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 
 # Asyncronous Java NIO **http/2 only** packet streaming server/client.
@@ -9,7 +9,7 @@
 TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons. 
 
 ```
-"io.github.ollls" %% "quartz-h2" % "0.4.0"
+"io.github.ollls" %% "quartz-h2" % "0.4.1"
 ```
 to start server example with IO
 ```
@@ -52,14 +52,16 @@ onConnect()/onDisconnect(), connectionTbl used to manage client HTTP/2 connectio
 
 ```scala
  val connectionTbl = java.util.concurrent.ConcurrentHashMap[Long, Http2ClientConnection](100).asScala
+ val ctx = QuartzH2Client.buildSSLContext("TLSv1.3", null, null, true)
  ... skip skip 
   val R: HttpRouteIO = 
   case req @ GET -> Root / "flow" =>
       for {
         ... skip skip
         //request is another case class which is not shown here
-        conn <- IO(connectionTbl.get(req.connId))
-        response <- conn.doPost( "/v1/token/", fs2.Stream.chunk(Chunk.array(writeToArray(request))), Headers().contentType( ContentType.JSON )
+        connOpt  <- IO(connectionTbl.get(req.connId))
+        //todo: check for Option.None
+        response <- connOpt.get.doPost( "/v1/token/", fs2.Stream.chunk(Chunk.array(writeToArray(request))), Headers().contentType( ContentType.JSON )
       )
       result <- response.bodyAsText
     } yield (Response.Ok().contentType(ContentType.JSON)).asText(result)
@@ -74,7 +76,7 @@ onConnect()/onDisconnect(), connectionTbl used to manage client HTTP/2 connectio
   } yield ()
 
   def onConnect(id: Long) = for {
-    c <- QuartzH2Client.open("https://sts.googleapis.com", tlsBlindTrust = true)
+    c <- QuartzH2Client.open("https://sts.googleapis.com", ctx = ctx)
     _ <- IO(connectionTbl.put(id, c))
     _ <- Logger[IO].info(
       s"HttpRouteIO: https://sts.googleapis.com open for connection Id = $id"
