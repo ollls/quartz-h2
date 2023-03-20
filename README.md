@@ -61,7 +61,7 @@ onConnect()/onDisconnect(), connectionTbl used to manage client HTTP/2 connectio
         //request is another case class which is not shown here
         connOpt  <- IO(connectionTbl.get(req.connId))
         //todo: check for Option.None
-        response <- connOpt.get.doPost( "/v1/token/", fs2.Stream.chunk(Chunk.array(writeToArray(request))), Headers().contentType( ContentType.JSON )
+        response <- connOpt.get.doPost( "/v1/token/", fs2.Stream.emits(writeToArray(request)), Headers().contentType( ContentType.JSON )
       )
       result <- response.bodyAsText
     } yield (Response.Ok().contentType(ContentType.JSON)).asText(result)
