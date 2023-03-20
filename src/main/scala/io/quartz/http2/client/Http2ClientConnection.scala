@@ -432,7 +432,7 @@ class Http2ClientConnection(
     _ <- sendFrame(Frames.mkWindowUpdateFrame(0, win_sz.toInt - 65535))
       .whenA(INITIAL_WINDOW_SIZE > 65535)
     _ <- Logger[IO]
-      .debug(s"Client: send UPDATE window ${win_sz - 65535} streamId=0")
+      .debug(s"Client: Send initial WINDOW UPDATE global ${win_sz - 65535} streamId=0")
       .whenA(INITIAL_WINDOW_SIZE > 65535)
 
     _ <- awaitSettings.get
@@ -513,7 +513,7 @@ class Http2ClientConnection(
       _ <- sendFrame(Frames.mkWindowUpdateFrame(streamId, INITIAL_WINDOW_SIZE - 65535))
         .whenA(INITIAL_WINDOW_SIZE > 65535)
       _ <- Logger[IO]
-        .debug(s"Client: send UPDATE window ${INITIAL_WINDOW_SIZE - 65535} streamId=$streamId")
+        .debug(s"Client: Send initial WINDOW UPDATE ${INITIAL_WINDOW_SIZE - 65535} streamId=$streamId")
         .whenA(INITIAL_WINDOW_SIZE > 65535)
 
       // DATA /////
