@@ -63,7 +63,7 @@ object Http2Connection {
 
   def make(
       ch: IOChannel,
-      id : Long,
+      id: Long,
       maxStreams: Int,
       keepAliveMs: Int,
       httpRoute: Request => IO[Option[Response]],
@@ -132,35 +132,82 @@ object Http2Connection {
     (len, frameType, flags, streamId)
   }
 
-  private[this] def dataEvalEffectProducer(c: Http2Connection, q: Queue[IO, ByteBuffer]): IO[ByteBuffer] = {
+  private[this] def dataEvalEffectProducer(
+      c: Http2Connection,
+      q: Queue[IO, ByteBuffer]
+  ): IO[ByteBuffer] = {
     for {
       bb <- q.take
+      _ <- IO
+        .raiseError(java.nio.channels.ClosedChannelException())
+        .whenA(bb == null)
       tp <- IO(parseFrame(bb))
       streamId = tp._4
       len = tp._1
 
       o_stream <- IO(c.streamTbl.get(streamId))
-      _ <- IO.raiseError(ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")).whenA(o_stream.isEmpty)
+      _ <- IO
+        .raiseError(
+          ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")
+        )
+        .whenA(o_stream.isEmpty)
       stream <- IO(o_stream.get)
 
-      // global counter
+      ////////////////////////////////////////////////
+      // global counter with Window Update.
+      // now we track both global and local during request.stream processing
+      // globalBytesOfPendingInboundData shared reference betweem streams
+      //////////////////////////////////////////////
       _ <- c.decrementGlobalPendingInboundData(len)
+      bytes_pending <- c.globalBytesOfPendingInboundData.get
+      bytes_available <- c.globalInboundWindow.get
+      globalWinIncrement <- IO {
+        if (c.INITIAL_WINDOW_SIZE > bytes_pending) c.INITIAL_WINDOW_SIZE - bytes_pending
+        else c.INITIAL_WINDOW_SIZE
+      }
+      _ <- c
+        .sendFrame(Frames.mkWindowUpdateFrame(0, globalWinIncrement))
+        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
+
+      _ <- c.globalInboundWindow
+        .update(_ + globalWinIncrement)
+        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
+
+      _ <- Logger[IO]
+        .debug(s"Client: Send WINDOW UPDATE global $globalWinIncrement $bytes_available")
+        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
+      //////////////////////////////////////////////
       // local counter
-      _ <- c.updateStreamWith(0, streamId, c => c.bytesOfPendingInboundData.update(_ - len))
+      _ <- c.updateStreamWith(
+        0,
+        streamId,
+        c => c.bytesOfPendingInboundData.update(_ - len)
+      )
 
-      localWin <- stream.inboundWindow.get
+      bytes_available_per_stream <- stream.inboundWindow.get
 
-      WINDOW <- IO(c.settings.INITIAL_WINDOW_SIZE)
-      pending_sz <- c.globalBytesOfPendingInboundData.get
-      updWin = if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW
+      bytes_pending_per_stream <- c.globalBytesOfPendingInboundData.get
+      streamWinIncrement <- IO {
+        if (c.INITIAL_WINDOW_SIZE > bytes_pending_per_stream) c.INITIAL_WINDOW_SIZE - bytes_pending_per_stream
+        else c.INITIAL_WINDOW_SIZE
+      }
       _ <-
-        if (updWin > WINDOW * 0.7 && localWin < WINDOW * 0.3) {
-          Logger[IO].debug(s"Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin") >> c
-            .sendFrame(Frames.mkWindowUpdateFrame(streamId, if (updWin > 0) updWin else WINDOW)) >>
-            stream.inboundWindow.update(_ + updWin)
+        if (
+          streamWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available_per_stream < c.INITIAL_WINDOW_SIZE * 0.3
+        ) {
+          Logger[IO].debug(
+            s"Client: Send WINDOW UPDATE local on processing incoming data=$streamWinIncrement localWin=$bytes_available_per_stream"
+          ) >> c
+            .sendFrame(
+              Frames.mkWindowUpdateFrame(
+                streamId,
+                if (streamWinIncrement > 0) streamWinIncrement else c.INITIAL_WINDOW_SIZE
+              )
+            ) >>
+            stream.inboundWindow.update(_ + streamWinIncrement)
         } else {
           Logger[IO].trace(
-            ">>>>>>>>>>>>>>>>>>>>>>>>>> still processing incoming data, pause remote, pending data = " + pending_sz
+            "Client: >>>>>>>>>> still processing incoming data, pause remote, pending data = " + bytes_pending_per_stream
           ) >> IO.unit
         }
 
@@ -251,19 +298,19 @@ case class Http2Stream(
 
 class Http2Connection(
     ch: IOChannel,
-    val id : Long,
+    val id: Long,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
     outq: Queue[IO, ByteBuffer],
     outDataQEventQ: Queue[IO, Boolean],
     globalTransmitWindow: Ref[IO, Long],
     val globalBytesOfPendingInboundData: Ref[IO, Int], // metric
-    globalInboundWindow: Ref[IO, Long],
+    val globalInboundWindow: Ref[IO, Long],
     shutdownD: Deferred[IO, Boolean],
     hSem: Semaphore[IO],
     MAX_CONCURRENT_STREAMS: Int,
     HTTP2_KEEP_ALIVE_MS: Int,
-    INITIAL_WINDOW_SIZE: Int
+    val INITIAL_WINDOW_SIZE: Int
 ) {
 
   val settings: Http2Settings = new Http2Settings()
@@ -574,7 +621,9 @@ class Http2Connection(
         h <- d.get
         _ <- interceptContentLen(c, h)
         r <- IO(
-          Request( id, streamId, 
+          Request(
+            id,
+            streamId,
             h,
             if ((flags & Flags.END_STREAM) == Flags.END_STREAM)
               Stream.empty
@@ -634,27 +683,6 @@ class Http2Connection(
 
   }
 
-  private[this] def processInboundGlobalFlowControl(streamId: Int, dataSize: Int) = {
-    for {
-      win_sz <- this.globalInboundWindow.get
-
-      pending_sz <- this.globalBytesOfPendingInboundData.get
-
-      WINDOW <- IO(this.settings.INITIAL_WINDOW_SIZE)
-
-      _ <-
-        if ((win_sz - dataSize) < WINDOW * 0.3) { // less then 30% space available, time for WINDOW_UPDATE
-          val updWin =
-            if (WINDOW > pending_sz) WINDOW - pending_sz else WINDOW
-          this.globalInboundWindow.update(_ + updWin) >> Logger[IO].trace(
-            "Send WINDOW UPDATE global = " + updWin
-          ) >> sendFrame(
-            Frames.mkWindowUpdateFrame(0, updWin)
-          )
-        } else IO.unit
-    } yield ()
-  }
-
   private[this] def accumData(streamId: Int, bb: ByteBuffer, dataSize: Int): IO[Unit] = {
     for {
       o_c <- IO(this.streamTbl.get(streamId))
@@ -665,7 +693,6 @@ class Http2Connection(
       localWin_sz <- c.inboundWindow.get
       _ <- this.globalInboundWindow.update(_ - dataSize) >>
         this.incrementGlobalPendingInboundData(dataSize) >>
-        processInboundGlobalFlowControl(streamId, dataSize) >>
         c.inboundWindow.update(_ - dataSize) >>
         c.bytesOfPendingInboundData.update(_ + dataSize)
 
@@ -936,6 +963,7 @@ class Http2Connection(
             }(_ => hSem.release)
           } yield ()
       }
+      _ <- Logger[IO].info(s"closeStream($streamId)")
       _ <- closeStream(streamId)
     } yield ()
 

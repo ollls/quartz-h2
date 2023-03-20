@@ -47,7 +47,7 @@ object Http2ClientConnection {
   def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
     bb <- outq.take
     _ <- ch.write(bb)
-  } yield ()).handleErrorWith(e => Logger[IO].error("Client: " + e.toString()))
+  } yield ()).handleErrorWith(e => Logger[IO].error("Client: outBoundWorker - " + e.toString()))
 
   /** Reads data from the given IOChannel and processes it with the packet_handler. This function reads data from the
     * IOChannel in chunks representing Http2 packets, converts them to packets using the makePacketStream function, and
@@ -69,7 +69,7 @@ object Http2ClientConnection {
       settings0 <- Ref[IO].of(
         Http2Settings()
       ) // will be loaded with server data when awaitSettings is completed
-      inboundWindow <- Ref[IO].of(65535L)
+      inboundWindow <- Ref[IO].of[Long](incomingWindowSize)
       globalBytesOfPendingInboundData <- Ref[IO].of(0)
       globalTransmitWindow <- Ref[IO].of[Long](
         65535L
@@ -131,7 +131,7 @@ class Http2ClientConnection(
     awaitSettings: Deferred[IO, Boolean],
     settings1: Ref[IO, Http2Settings],
     val globalBytesOfPendingInboundData: Ref[IO, Int],
-    inboundWindow: Ref[IO, Long],
+    val inboundWindow: Ref[IO, Long],
     transmitWindow: Ref[IO, Long],
     INITIAL_WINDOW_SIZE: Int
 ) {
@@ -288,7 +288,7 @@ class Http2ClientConnection(
       .compile
       .drain
       .handleErrorWith(e => {
-        Logger[IO].error("Client: " + e.toString()) >> dropStreams()
+        Logger[IO].error("Client: inBoundWorker - " + e.toString()) >> dropStreams()
       })
 
   def dropStreams() = for {
@@ -429,6 +429,12 @@ class Http2ClientConnection(
 
     win_sz <- inboundWindow.get
 
+    _ <- sendFrame(Frames.mkWindowUpdateFrame(0, win_sz.toInt - 65535))
+      .whenA(INITIAL_WINDOW_SIZE > 65535)
+    _ <- Logger[IO]
+      .debug(s"Client: send UPDATE window ${win_sz - 65535} streamId=0")
+      .whenA(INITIAL_WINDOW_SIZE > 65535)
+
     _ <- awaitSettings.get
     settings <- settings1.get
     _ <- sendFrame(Frames.makeSettingsAckFrame())
@@ -488,10 +494,10 @@ class Http2ClientConnection(
       _ <- awaitSettings.get
       settings <- settings1.get
       headerEncoder <- headerEncoderRef.get
+      streamId <- streamIdRef.getAndUpdate(_ + 2)
       // HEADERS /////
       stream <- hSem.acquire.bracket { _ =>
         for {
-          streamId <- streamIdRef.getAndUpdate(_ + 2)
           stream <- openStream(streamId, INITIAL_WINDOW_SIZE)
           _ <- headerFrame(
             streamId,
@@ -503,6 +509,12 @@ class Http2ClientConnection(
           ).traverse(b => sendFrame(b))
         } yield (stream)
       }(_ => hSem.release)
+
+      _ <- sendFrame(Frames.mkWindowUpdateFrame(streamId, INITIAL_WINDOW_SIZE - 65535))
+        .whenA(INITIAL_WINDOW_SIZE > 65535)
+      _ <- Logger[IO]
+        .debug(s"Client: send UPDATE window ${INITIAL_WINDOW_SIZE - 65535} streamId=$streamId")
+        .whenA(INITIAL_WINDOW_SIZE > 65535)
 
       // DATA /////
       pref <- Ref.of[IO, Chunk[Byte]](Chunk.empty[Byte])
@@ -672,8 +684,30 @@ class Http2ClientConnection(
         .whenA(o_stream.isEmpty)
       stream <- IO(o_stream.get)
 
-      // global counter
+      ////////////////////////////////////////////////
+      // global counter with Window Update.
+      // now we track both global and local during request.stream processing
+      // globalBytesOfPendingInboundData shared reference betweem streams
+      //////////////////////////////////////////////
       _ <- c.decrementGlobalPendingInboundData(len)
+      bytes_pending <- c.globalBytesOfPendingInboundData.get
+      bytes_available <- c.inboundWindow.get
+      globalWinIncrement <- IO {
+        if (INITIAL_WINDOW_SIZE > bytes_pending) INITIAL_WINDOW_SIZE - bytes_pending
+        else INITIAL_WINDOW_SIZE
+      }
+      _ <- c
+        .sendFrame(Frames.mkWindowUpdateFrame(0, globalWinIncrement))
+        .whenA(globalWinIncrement > INITIAL_WINDOW_SIZE * 0.7 && bytes_available < INITIAL_WINDOW_SIZE * 0.3)
+
+      _ <- this.inboundWindow
+        .update(_ + globalWinIncrement)
+        .whenA(globalWinIncrement > INITIAL_WINDOW_SIZE * 0.7 && bytes_available < INITIAL_WINDOW_SIZE * 0.3)
+
+      _ <- Logger[IO]
+        .debug(s"Client: Send WINDOW UPDATE global $globalWinIncrement $bytes_available")
+        .whenA(globalWinIncrement > INITIAL_WINDOW_SIZE * 0.7 && bytes_available < INITIAL_WINDOW_SIZE * 0.3)
+      //////////////////////////////////////////////
       // local counter
       _ <- c.updateStreamWith(
         0,
@@ -681,27 +715,28 @@ class Http2ClientConnection(
         c => c.bytesOfPendingInboundData.update(_ - len)
       )
 
-      localWin <- stream.inboundWindow.get
+      bytes_available_per_stream <- stream.inboundWindow.get
 
-      pending_sz <- c.globalBytesOfPendingInboundData.get
-      updWin =
-        if (INITIAL_WINDOW_SIZE > pending_sz) INITIAL_WINDOW_SIZE - pending_sz
+      bytes_pending_per_stream <- c.globalBytesOfPendingInboundData.get
+      streamWinIncrement <- IO {
+        if (INITIAL_WINDOW_SIZE > bytes_pending_per_stream) INITIAL_WINDOW_SIZE - bytes_pending_per_stream
         else INITIAL_WINDOW_SIZE
+      }
       _ <-
-        if (updWin > INITIAL_WINDOW_SIZE * 0.7 && localWin < INITIAL_WINDOW_SIZE * 0.3) {
+        if (streamWinIncrement > INITIAL_WINDOW_SIZE * 0.7 && bytes_available_per_stream < INITIAL_WINDOW_SIZE * 0.3) {
           Logger[IO].debug(
-            s"Client: Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin"
+            s"Client: Send WINDOW UPDATE local on processing incoming data=$streamWinIncrement localWin=$bytes_available_per_stream"
           ) >> c
             .sendFrame(
               Frames.mkWindowUpdateFrame(
                 streamId,
-                if (updWin > 0) updWin else INITIAL_WINDOW_SIZE
+                if (streamWinIncrement > 0) streamWinIncrement else INITIAL_WINDOW_SIZE
               )
             ) >>
-            stream.inboundWindow.update(_ + updWin)
+            stream.inboundWindow.update(_ + streamWinIncrement)
         } else {
           Logger[IO].trace(
-            "Client: >>>>>>>>>> still processing incoming data, pause remote, pending data = " + pending_sz
+            "Client: >>>>>>>>>> still processing incoming data, pause remote, pending data = " + bytes_pending_per_stream
           ) >> IO.unit
         }
 
@@ -732,29 +767,6 @@ class Http2ClientConnection(
     dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array()))
   }
 
-  private[this] def processInboundGlobalFlowControl(
-      streamId: Int,
-      dataSize: Int
-  ) = {
-    for {
-      win_sz <- this.inboundWindow.get
-
-      pending_sz <- this.globalBytesOfPendingInboundData.get
-
-      WINDOW <- IO(INITIAL_WINDOW_SIZE)
-
-      updWin <- if (WINDOW > pending_sz) IO(WINDOW - pending_sz) else IO(WINDOW)
-      _ <-
-        if (updWin > WINDOW * 0.7 && win_sz < WINDOW * 0.3) {
-          this.inboundWindow.update(_ + updWin) >> Logger[IO].debug(
-            "Client: Send WINDOW UPDATE global = " + updWin
-          ) >> sendFrame(
-            Frames.mkWindowUpdateFrame(0, if (updWin > 0) updWin else WINDOW)
-          )
-        } else IO.unit
-    } yield ()
-  }
-
   private[this] def accumData(
       streamId: Int,
       bb: ByteBuffer,
@@ -768,12 +780,10 @@ class Http2ClientConnection(
         )
         .whenA(o_c.isEmpty)
       c <- IO(o_c.get)
-      localWin_sz <- c.inboundWindow.get
       _ <- this.inboundWindow.update(_ - dataSize) >>
         this.incrementGlobalPendingInboundData(dataSize) >>
         c.inboundWindow.update(_ - dataSize) >>
-        c.bytesOfPendingInboundData.update(_ + dataSize) >>
-        processInboundGlobalFlowControl(streamId, dataSize)
+        c.bytesOfPendingInboundData.update(_ + dataSize)
 
       _ <- c.inDataQ.offer(bb)
 
