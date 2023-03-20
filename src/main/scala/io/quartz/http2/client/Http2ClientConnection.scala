@@ -120,7 +120,7 @@ object Http2ClientConnection {
   */
 class Http2ClientConnection(
     ch: IOChannel,
-    timeOutMs : Int,
+    timeOutMs: Int,
     uri: URI,
     streamIdRef: Ref[IO, Int],
     headerEncoderRef: Ref[IO, HeaderEncoder],
@@ -282,7 +282,7 @@ class Http2ClientConnection(
 
   def settings = settings1.get
 
-  def inBoundWorker(ch: IOChannel, timeOutMs : Int) =
+  def inBoundWorker(ch: IOChannel, timeOutMs: Int) =
     makePacketStream(ch, timeOutMs, Chunk.empty[Byte])
       .foreach(p => packet_handler(p))
       .compile
@@ -427,17 +427,11 @@ class Http2ClientConnection(
 
     _ <- sendFrame(Frames.makeSettingsFrameClient(ack = false, s))
 
-    _ <- sendFrame(Frames.makeSettingsAckFrame())
-
     win_sz <- inboundWindow.get
-
-    // new value of INITIAL_WINDOW_SIZE in FrameTypes.SETTINGS packet not always getting propogated in servers
-    // check RFC ???, but all browser and clients always send update WINSIZE
-    _ <- sendFrame(Frames.mkWindowUpdateFrame(0, INITIAL_WINDOW_SIZE - 65535))
-      .whenA(INITIAL_WINDOW_SIZE > 65535)
 
     _ <- awaitSettings.get
     settings <- settings1.get
+    _ <- sendFrame(Frames.makeSettingsAckFrame())
 
     _ <- headerEncoderRef.set(new HeaderEncoder(settings.HEADER_TABLE_SIZE))
     _ <- headerDecoderRef.set(
@@ -695,7 +689,7 @@ class Http2ClientConnection(
         else INITIAL_WINDOW_SIZE
       _ <-
         if (updWin > INITIAL_WINDOW_SIZE * 0.7 && localWin < INITIAL_WINDOW_SIZE * 0.3) {
-          Logger[IO].trace(
+          Logger[IO].debug(
             s"Client: Send WINDOW UPDATE local on processing incoming data=$updWin localWin=$localWin"
           ) >> c
             .sendFrame(
@@ -767,7 +761,6 @@ class Http2ClientConnection(
       dataSize: Int
   ): IO[Unit] = {
     for {
-      test <- globalBytesOfPendingInboundData.get
       o_c <- IO(this.streamTbl.get(streamId))
       _ <- IO
         .raiseError(
@@ -776,11 +769,11 @@ class Http2ClientConnection(
         .whenA(o_c.isEmpty)
       c <- IO(o_c.get)
       localWin_sz <- c.inboundWindow.get
-      _ <- processInboundGlobalFlowControl(streamId, dataSize) >>
-        this.inboundWindow.update(_ - dataSize) >>
+      _ <- this.inboundWindow.update(_ - dataSize) >>
         this.incrementGlobalPendingInboundData(dataSize) >>
         c.inboundWindow.update(_ - dataSize) >>
-        c.bytesOfPendingInboundData.update(_ + dataSize)
+        c.bytesOfPendingInboundData.update(_ + dataSize) >>
+        processInboundGlobalFlowControl(streamId, dataSize)
 
       _ <- c.inDataQ.offer(bb)
 

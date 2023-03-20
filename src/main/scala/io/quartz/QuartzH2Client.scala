@@ -41,9 +41,9 @@ object QuartzH2Client {
 
   def buildSSLContext(
       protocol: String,
-      JKSkeystore: String,
-      password: String,
-      blindTrust: Boolean
+      JKSkeystore: String = null,
+      password: String = "",
+      blindTrust: Boolean = false
   ) = {
     val sslContext: SSLContext = SSLContext.getInstance(protocol)
 
@@ -122,7 +122,7 @@ object QuartzH2Client {
 
   def open(
       hostURI: String,
-      timeOutMs : Int,
+      timeOutMs: Int,
       incomingWindowSize: Int = 65535,
       ctx: SSLContext,
       socketGroup: AsynchronousChannelGroup = null
