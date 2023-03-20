@@ -389,8 +389,7 @@ class QuartzH2Server(
       addr <- IO(new InetSocketAddress(HOST, PORT))
       _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 (async - Java NIO)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
-      _ <- Logger[IO].info(s"Fast mode (stream priority switched off): ${Http2Connection.FAST_MODE}")
-      _ <- Logger[IO].info(s"H2 Idle Timeout: $keepAliveMs Ms")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(
         s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}"
       )
@@ -431,6 +430,8 @@ class QuartzH2Server(
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
       _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 ( sync - Java Socket )")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}")
 
       conId <- Ref[IO].of(0L)
