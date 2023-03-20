@@ -174,7 +174,7 @@ object Http2Connection {
         .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
 
       _ <- Logger[IO]
-        .debug(s"Client: Send WINDOW UPDATE global $globalWinIncrement $bytes_available")
+        .debug(s"Send WINDOW UPDATE global $globalWinIncrement $bytes_available")
         .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
       //////////////////////////////////////////////
       // local counter
@@ -196,7 +196,7 @@ object Http2Connection {
           streamWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available_per_stream < c.INITIAL_WINDOW_SIZE * 0.3
         ) {
           Logger[IO].debug(
-            s"Client: Send WINDOW UPDATE local on processing incoming data=$streamWinIncrement localWin=$bytes_available_per_stream"
+            s"Send WINDOW UPDATE local on processing incoming data=$streamWinIncrement localWin=$bytes_available_per_stream"
           ) >> c
             .sendFrame(
               Frames.mkWindowUpdateFrame(
@@ -207,7 +207,7 @@ object Http2Connection {
             stream.inboundWindow.update(_ + streamWinIncrement)
         } else {
           Logger[IO].trace(
-            "Client: >>>>>>>>>> still processing incoming data, pause remote, pending data = " + bytes_pending_per_stream
+            ">>>>>>>>>> still processing incoming data, pause remote, pending data = " + bytes_pending_per_stream
           ) >> IO.unit
         }
 
@@ -963,7 +963,6 @@ class Http2Connection(
             }(_ => hSem.release)
           } yield ()
       }
-      _ <- Logger[IO].info(s"closeStream($streamId)")
       _ <- closeStream(streamId)
     } yield ()
 
