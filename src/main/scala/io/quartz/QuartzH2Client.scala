@@ -24,18 +24,6 @@ import io.quartz.http2.Http2ClientConnection
 
 object QuartzH2Client {
 
-  def apply(
-      hostURI: String,
-      incomingWindowSize: Int = 65535,
-      ctx: SSLContext,
-      socketGroup: AsynchronousChannelGroup = null
-  ): IO[Http2ClientConnection] = open(
-    hostURI,
-    incomingWindowSize,
-    ctx,
-    socketGroup
-  )
-
   val TLS_PROTOCOL_TAG = "TLSv1.2"
 
   private def loadDefaultKeyStore(): KeyStore = {
@@ -134,6 +122,7 @@ object QuartzH2Client {
 
   def open(
       hostURI: String,
+      timeOutMs : Int,
       incomingWindowSize: Int = 65535,
       ctx: SSLContext,
       socketGroup: AsynchronousChannelGroup = null
@@ -143,7 +132,7 @@ object QuartzH2Client {
       u,
       ctx
     )
-    c_h <- Http2ClientConnection.make(io_ch, u, incomingWindowSize)
+    c_h <- Http2ClientConnection.make(io_ch, u, timeOutMs, incomingWindowSize)
     settings <- c_h.H2_ClientConnect()
   } yield (c_h)
 

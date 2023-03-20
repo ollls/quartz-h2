@@ -57,7 +57,7 @@ object Http2ClientConnection {
     * @return
     *   a Fiber that represents the running computation
     */
-  def make(ch: IOChannel, uri: URI, incomingWindowSize: Int = 65535) = {
+  def make(ch: IOChannel, uri: URI, timeOutMs: Int, incomingWindowSize: Int = 65535) = {
     for {
       outq <- Queue.bounded[IO, ByteBuffer](1)
       f0 <- outBoundWorker(ch, outq).foreverM.start
@@ -77,6 +77,7 @@ object Http2ClientConnection {
     } yield (
       Http2ClientConnection(
         ch,
+        timeOutMs,
         uri,
         refsId,
         refEncoder,
@@ -119,6 +120,7 @@ object Http2ClientConnection {
   */
 class Http2ClientConnection(
     ch: IOChannel,
+    timeOutMs : Int,
     uri: URI,
     streamIdRef: Ref[IO, Int],
     headerEncoderRef: Ref[IO, HeaderEncoder],
@@ -280,8 +282,8 @@ class Http2ClientConnection(
 
   def settings = settings1.get
 
-  def inBoundWorker(ch: IOChannel) =
-    makePacketStream(ch, 100000, Chunk.empty[Byte])
+  def inBoundWorker(ch: IOChannel, timeOutMs : Int) =
+    makePacketStream(ch, timeOutMs, Chunk.empty[Byte])
       .foreach(p => packet_handler(p))
       .compile
       .drain
@@ -418,7 +420,7 @@ class Http2ClientConnection(
   /** H2_ClientConnect() initiate incoming connections
     */
   def H2_ClientConnect(): IO[Http2Settings] = for {
-    _ <- inBoundWorker(ch).start // init incoming packet reader
+    _ <- inBoundWorker(ch, timeOutMs).start // init incoming packet reader
     _ <- ch.write(Constants.getPrefaceBuffer())
 
     s <- IO(Http2Settings()).flatTap(s => IO { s.INITIAL_WINDOW_SIZE = INITIAL_WINDOW_SIZE })
