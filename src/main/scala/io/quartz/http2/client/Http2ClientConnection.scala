@@ -489,15 +489,16 @@ class Http2ClientConnection(
         .getAuthority())
 
     val endStreamInHeaders = if (s0 == Stream.empty) true else false
+    var _streamId = 9999 //streamId must be under sem, but we need to know local value outside.
 
     for {
       _ <- awaitSettings.get
       settings <- settings1.get
       headerEncoder <- headerEncoderRef.get
-      streamId <- streamIdRef.getAndUpdate(_ + 2)
       // HEADERS /////
       stream <- hSem.acquire.bracket { _ =>
         for {
+          streamId <- streamIdRef.getAndUpdate(_ + 2).map{ strId => _streamId  = strId; strId  }
           stream <- openStream(streamId, INITIAL_WINDOW_SIZE)
           _ <- headerFrame(
             streamId,
@@ -510,10 +511,10 @@ class Http2ClientConnection(
         } yield (stream)
       }(_ => hSem.release)
 
-      _ <- sendFrame(Frames.mkWindowUpdateFrame(streamId, INITIAL_WINDOW_SIZE - 65535))
+      _ <- sendFrame(Frames.mkWindowUpdateFrame( _streamId, INITIAL_WINDOW_SIZE - 65535))
         .whenA(INITIAL_WINDOW_SIZE > 65535)
       _ <- Logger[IO]
-        .debug(s"Client: Send initial WINDOW UPDATE ${INITIAL_WINDOW_SIZE - 65535} streamId=$streamId")
+        .debug(s"Client: Send initial WINDOW UPDATE ${INITIAL_WINDOW_SIZE - 65535} streamId=$_streamId")
         .whenA(INITIAL_WINDOW_SIZE > 65535)
 
       // DATA /////
