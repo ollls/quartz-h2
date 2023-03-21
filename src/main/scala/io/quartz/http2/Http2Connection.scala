@@ -1266,10 +1266,10 @@ class Http2Connection(
 
                 b <- hasEnded(streamId)
                 _ <- IO.raiseError(ErrorGen(streamId, Error.STREAM_CLOSED, "STREAM_CLOSED")).whenA(b)
-                _ <- accumData(streamId, packet0, len)
-                _ <- markEndOfStreamWithData(streamId).whenA((flags & Flags.END_STREAM) != 0)
                 // streams ends with data, no trailing headers for sure, reset to empty
                 _ <- setEmptyTrailingHeaders(streamId).whenA(((flags & Flags.END_STREAM) != 0))
+                _ <- markEndOfStreamWithData(streamId).whenA((flags & Flags.END_STREAM) != 0)
+                _ <- accumData(streamId, packet0, len)
               } yield ()
 
             case FrameTypes.WINDOW_UPDATE => {
