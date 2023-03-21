@@ -39,6 +39,18 @@ object QuartzH2Client {
     keystore;
   }
 
+  /** Builds an SSL context for use in an HTTP/2 client connection.
+    * @param protocol
+    *   The SSL/TLS protocol to use. E.g. "TLSv1.2".
+    * @param JKSkeystore
+    *   The path to the JKS keystore file. If null, a default keystore will be used.
+    * @param password
+    *   The password to use for the keystore. Ignored if JKSkeystore is null.
+    * @param blindTrust
+    *   Whether to blindly trust all SSL/TLS certificates. Default is false.
+    * @return
+    *   A new SSL context for use in an HTTP/2 client connection.
+    */
   def buildSSLContext(
       protocol: String,
       JKSkeystore: String = null,
@@ -120,11 +132,21 @@ object QuartzH2Client {
       )
   }
 
+  /** Opens an HTTP/2 client connection to the specified host URI using the provided SSL context.
+    * @param hostURI
+    *   The URI of the host to connect to.
+    * @param timeOutMs
+    *   The timeout in milliseconds for the connection attempt.
+    * @param ctx
+    *   The SSL context to use for the connection.
+    * @param incomingWindowSize
+    *   The size in bytes of the incoming flow control window.
+    */
   def open(
       hostURI: String,
       timeOutMs: Int,
-      incomingWindowSize: Int = 65535,
       ctx: SSLContext,
+      incomingWindowSize: Int = 65535,
       socketGroup: AsynchronousChannelGroup = null
   ): IO[Http2ClientConnection] = for {
     u <- IO(new URI(hostURI))
