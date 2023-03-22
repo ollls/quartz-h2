@@ -764,7 +764,8 @@ class Http2Connection(
             .whenA(contentLenFromHeader.isDefined && c.contentLenFromDataFrames != contentLenFromHeader.get)
 
         } yield ()
-    )
+    ).handleErrorWith( e => Logger[IO].error( s"markEndOfStream():  Stream $streamId closed already"))
+
 
   private[this] def haveHeadersEnded(streamId: Int): IO[Boolean] = {
     for {
