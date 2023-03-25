@@ -1,6 +1,7 @@
 package io.quartz
 
 import cats.effect.IO
+import cats.implicits._
 
 import io.quartz.netio
 import io.quartz.http2.model.Headers
@@ -21,6 +22,10 @@ import java.security.cert.X509Certificate
 import java.io.FileInputStream
 import java.io.File
 import io.quartz.http2.Http2ClientConnection
+
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import io.quartz.MyLogger._
 
 object QuartzH2Client {
 
@@ -99,6 +104,7 @@ object QuartzH2Client {
       ctx: SSLContext
   ): IO[TLSChannel] = {
     val T = for {
+      _ <- Logger[IO].debug(s"Client: Connecting to $host:$port")
       address <- IO(new java.net.InetSocketAddress(host, port))
       ch <- IO(
         if (socketGroup == null) AsynchronousSocketChannel.open()
@@ -107,6 +113,19 @@ object QuartzH2Client {
 
       ch <- TCPChannel.connect(host, port, socketGroup)
       tls_ch <- IO(new TLSChannel(ctx, ch)).flatTap(c => c.ssl_initClent_h2())
+
+      alpn_tag0 <- IO(tls_ch.f_SSL.engine.getApplicationProtocol())
+      alpn_tag <- IO(if (alpn_tag0 == null) "not selected or empty" else alpn_tag0)
+      _ <- Logger[IO].trace(s"Client: Server ALPN: $alpn_tag")
+      _ <- Logger[IO].debug("Client: ALPN, server accepted to use h2").whenA(alpn_tag == "h2")
+      _ <- IO
+        .raiseError(
+          new Exception(
+            s"Client: $host:$port failure to negotiate ALPN h2 protocol, ALPN tags were not present or not recognized"
+          )
+        )
+        .whenA(alpn_tag != "h2")
+
     } yield (tls_ch)
     T
   }
