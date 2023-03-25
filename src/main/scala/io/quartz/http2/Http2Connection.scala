@@ -36,7 +36,7 @@ import io.quartz.http2.routes.Routes
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
-import cats.effect.kernel.MonadCancel.apply
+import cats.effect.Temporal
 
 object Http2Connection {
 
@@ -975,12 +975,10 @@ class Http2Connection(
     for {
       _ <- updateStreamWith(12, streamId, c => c.done.get).whenA(Http2Connection.FAST_MODE == false)
       _ <- IO(concurrentStreams.decrementAndGet())
-      // keep last HTTP2_MAX_CONCURRENT_STREAMS in closed state.
-      // potentialy it's possible for client to reuse old streamId outside of that last MAX
-      // _ <- IO(streamTbl.remove(streamId - 2 * Http2Connection.HTTP2_MAX_CONCURRENT_STREAMS))
-      //  .whenA(streamId > 2 * Http2Connection.HTTP2_MAX_CONCURRENT_STREAMS)
-      // _ <- IO.sleep( 50.millis )
-      _ <- IO.sleep(700.millis).map(_ => streamTbl.remove(streamId)).start
+      // known issue: potentialy it's possible for client to reuse old streamId
+      // Something weird about IO.sleep in the current version 50% delay on IO(sleep) creation?, keep original no sleep for now
+      //  _ <- { Temporal[IO].sleep(700.milli) *> IO(streamTbl.remove(streamId)) }.start
+      _ <- IO(streamTbl.remove(streamId))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
