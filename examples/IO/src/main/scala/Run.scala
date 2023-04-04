@@ -67,7 +67,10 @@ object MyApp extends IOApp {
       } yield (Response.Ok().asText("OK"))
 
     // best path for h2spec
-    case GET -> Root => IO(Response.Ok().asText("OK"))
+    case req @ GET -> Root =>
+      for {
+        _ <- req.stream.compile.drain
+      } yield (Response.Ok().asText("OK"))
 
     // perf tests
     case GET -> Root / "test" => IO(Response.Ok())
@@ -109,7 +112,7 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx, incomingWinSize = 1048576)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // incomingWinSize = 3145728)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)

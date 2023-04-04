@@ -901,7 +901,7 @@ class Http2Connection(
         .whenA(request.headers.get("te").isDefined && request.headers.get("te").get != "trailers")
 
       response_o <- (httpRoute(request)).handleErrorWith {
-        case e: java.io.FileNotFoundException =>
+        case e: (java.io.FileNotFoundException | java.nio.file.NoSuchFileException) =>
           Logger[IO].error(e.toString) >> IO(None)
         case e =>
           Logger[IO].error(e.toString) >>
@@ -913,9 +913,12 @@ class Http2Connection(
           for {
             _ <- Logger[IO].trace("response.headers: " + response.headers.printHeaders(" | "))
             endStreamInHeaders <- if (response.stream == Stream.empty) IO(true) else IO(false)
-            _ <- Logger[IO].debug(
+            _ <- Logger[IO].trace(
               s"Send response code: ${response.code.toString()} only header = $endStreamInHeaders"
             )
+           
+            _ <- Logger[IO].info(s"H2 stream = $streamId ${request.method.name} ${request.path} ${response.code.toString()}")
+
             _ <- hSem.acquire.bracket { _ =>
               headerFrame(streamId, Priority.NoPriority, endStreamInHeaders, response.headers)
                 .traverse(b => sendFrame(b))
@@ -952,7 +955,8 @@ class Http2Connection(
           for {
             o44 <- IO(Response.Error(StatusCode.NotFound)) // 404
             _ <- Logger[IO].trace("response.headers: " + o44.headers.printHeaders(" | "))
-            _ <- Logger[IO].debug(s"Send response code: ${o44.code.toString()}")
+            _ <- Logger[IO].trace(s"Send response code: ${o44.code.toString()}")
+            _ <- Logger[IO].error(s"H2 stream = $streamId ${request.method.name} ${request.path} ${o44.code.toString()}")
             _ <- hSem.acquire.bracket { _ =>
               for {
                 bb2 <- IO(headerFrame(streamId, Priority.NoPriority, true, o44.headers))

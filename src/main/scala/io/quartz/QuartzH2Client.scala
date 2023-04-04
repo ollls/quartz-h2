@@ -112,7 +112,7 @@ object QuartzH2Client {
       )
 
       ch <- TCPChannel.connect(host, port, socketGroup)
-      tls_ch <- IO(new TLSChannel(ctx, ch)).flatTap(c => c.ssl_initClent_h2())
+      tls_ch <- IO(new TLSChannel(ctx, ch)).flatTap(c => c.ssl_initClent_h2(host))
 
       alpn_tag0 <- IO(tls_ch.f_SSL.engine.getApplicationProtocol())
       alpn_tag <- IO(if (alpn_tag0 == null) "not selected or empty" else alpn_tag0)

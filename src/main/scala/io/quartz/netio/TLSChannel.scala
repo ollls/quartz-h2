@@ -26,6 +26,7 @@ import java.nio.channels.{
 
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import javax.net.ssl.SNIServerName
 import java.security.cert.X509Certificate
 import java.io.FileInputStream
 import java.io.File
@@ -330,9 +331,9 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
       }
       r <- loop
         .iterateWhile(c => { loop_cntr = loop_cntr + 1; c != FINISHED && loop_cntr < 300 })
-        //.flatTap(_ =>
-        //  IO.println("POS=" + in_buf.position() + "  " + temp + "  P4 = " + TLS_PACKET_SZ + "/" + APP_PACKET_SZ)
-        //)
+      // .flatTap(_ =>
+      //  IO.println("POS=" + in_buf.position() + "  " + temp + "  P4 = " + TLS_PACKET_SZ + "/" + APP_PACKET_SZ)
+      // )
       // SSL data lefover issue.
       // very rare case when TLS handshake reads more then neccssary
       // this happens on very first connection upon restart only one time, when JVM is slow on first load/compilation
@@ -372,10 +373,18 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     result.handleErrorWith(_ => IO.unit)
   }
 
-  def ssl_initClent_h2(): IO[Unit] = {
+  class SniName(sniServerName: String) extends SNIServerName(0, sniServerName.getBytes())
+  def ssl_initClent_h2(sniServerName: String): IO[Unit] = {
     for {
       _ <- f_SSL.setUseClientMode(true)
       sslParameters <- IO(f_SSL.engine.getSSLParameters())
+
+      sniList <- IO(
+        Array(sniServerName)
+          .map(SniName(_))
+          .foldLeft(new java.util.ArrayList[SNIServerName]())((list, item) => { list.add(item); list })
+      )
+      _ <- IO(sslParameters.setServerNames(sniList))
       _ <- IO(sslParameters.setApplicationProtocols(Array("h2")))
       _ <- IO(f_SSL.engine.setSSLParameters(sslParameters))
       x <- doHandshakeClient()
@@ -387,7 +396,6 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
         } else IO.unit
     } yield ()
   }
-
 
   def ssl_initClient(): IO[Unit] = {
     for {
@@ -441,8 +449,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
     val res = for {
       out <- IO(ByteBuffer.allocate(if (in.limit() > TLS_PACKET_SZ) in.limit() * 3 else TLS_PACKET_SZ * 3))
-      //_ <- IO(out.clear)
-
+   
       loop = for {
         res <- f_SSL.wrap(in, out)
         stat <- IO(res.getStatus())
