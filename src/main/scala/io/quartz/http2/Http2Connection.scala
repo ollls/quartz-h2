@@ -40,12 +40,6 @@ import cats.effect.Temporal
 
 object Http2Connection {
 
-  val FAST_MODE = true
-
-  // TBD - true for now
-  implicit val orderForPriorityPackets: Order[ByteBuffer] =
-    Order.fromLessThan((_, _) => true)
-
   private[this] def outBoundWorkerProc(
       ch: IOChannel,
       outq: Queue[IO, ByteBuffer],
@@ -74,8 +68,8 @@ object Http2Connection {
       _ <- Logger[IO].debug("Http2Connection.make()")
       shutdownPromise <- Deferred[IO, Boolean]
 
-      outq <- Dequeue.bounded[IO, ByteBuffer](1)
-      outDataQEventQ <- Queue.unbounded[IO, Boolean]
+      //1024 perf buffer
+      outq <- Dequeue.bounded[IO, ByteBuffer](1024)
       http11Req_ref <- Ref[IO].of[Option[Request]](http11request)
 
       hSem <- Semaphore[IO](1)
@@ -98,7 +92,6 @@ object Http2Connection {
           httpRoute,
           http11Req_ref,
           outq,
-          outDataQEventQ,
           globalTransmitWindow,
           globalBytesOfPendingInboundData,
           globalInboundWindow,
@@ -109,15 +102,6 @@ object Http2Connection {
           in_winSize
         )
       )
-      runMe = c.streamDataOutWorker
-        .handleErrorWith(e => Logger[IO].error("streamDataOutWorker fiber: " + e.toString()))
-        .iterateUntil(_ == true)
-        .start
-
-      _ <- runMe
-
-      _ <- Logger[IO].trace("Http2Connection.make() - Start data worker")
-
     } yield c
   }
 
@@ -280,7 +264,6 @@ case class Http2Stream(
     header: ArrayBuffer[ByteBuffer],
     trailing_header: ArrayBuffer[ByteBuffer],
     inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
-    outDataQ: Queue[IO, ByteBuffer], // priority outbound queue for all data frames, scanned by one thread
     outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
     transmitWindow: Ref[IO, Long],
     syncUpdateWindowQ: Queue[IO, Unit],
@@ -302,7 +285,6 @@ class Http2Connection(
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
     outq: Queue[IO, ByteBuffer],
-    outDataQEventQ: Queue[IO, Boolean],
     globalTransmitWindow: Ref[IO, Long],
     val globalBytesOfPendingInboundData: Ref[IO, Int], // metric
     val globalInboundWindow: Ref[IO, Long],
@@ -337,67 +319,8 @@ class Http2Connection(
     globalBytesOfPendingInboundData.update(_ + increment)
 
   def shutdown: IO[Unit] =
-    Logger[IO].info("Http2Connection.shutdown") >> outDataQEventQ.offer(true) >> outq.offer(null) >> shutdownD.get.void
+     outq.offer(null) >> shutdownD.get.void >> Logger[IO].error("Http2Connection.shutdown") 
 
-  //////////////////////////////////////////
-  private[this] def streamDataOutBoundProcessor(streamId: Int, c: Http2Stream): IO[Unit] = {
-    for {
-      opt <- c.outDataQ.tryTake
-
-      res <- opt match {
-        case Some(data_frame) =>
-          for {
-            t <- IO(Http2Connection.parseFrame(data_frame))
-            // len = t._1
-            // frameType = t._2
-            flags = t._3
-            // streamId = t._4
-            _ <- this.sendFrame(data_frame)
-            x <- outDataQEventQ.take
-            _ <- outDataQEventQ.take.whenA(
-              x == true
-            )
-            _ <- outDataQEventQ
-              .offer(true)
-              .whenA(x == true) // rare case when shutdown requested interleaved with packet send which is false
-            // _ <- IO.println("Yeld true").whenA(x == true) // we need to preserve true as flag to termnate fiber
-
-            // up <- c.active.get
-            // _ <- IO(streamTbl.remove(streamId)).whenA(up == false)
-
-            _ <- c.done.complete(()).whenA(Flags.END_STREAM(flags) == true)
-
-          } yield ()
-
-        case None =>
-          for {
-            _ <- IO.unit
-            // up <- c.active.get
-            // _ <- c.done.complete(()).whenA(up == false)
-            // x <- outDataQEventQ.take
-            // _ <- outDataQEventQ.offer(x)
-            // _ <- IO.println( "Yeld true1" ) //.whenA( x == true )
-
-            // up <- c.active.get
-            // _ <- IO.println("REM").whenA(up == false)
-            // _ <- IO(streamTbl.remove(streamId)).whenA(up == false)
-
-          } yield ()
-      }
-    } yield ()
-
-  }
-
-  //////////////////////////////////////////
-  private[this] def streamDataOutWorker: IO[Boolean] = {
-    for {
-      x <- outDataQEventQ.take
-      _ <- outDataQEventQ.offer(x)
-
-      _ <- this.streamTbl.iterator.toSeq.foldMap[IO[Unit]](c => streamDataOutBoundProcessor(c._1, c._2))
-      _ <- Logger[IO].debug("Shutdown H2 outbound data packet priority manager").whenA(x == true)
-    } yield (x)
-  }
 
   /*
     When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
@@ -535,7 +458,6 @@ class Http2Connection(
           header,
           trailing_header,
           inDataQ = dataIn,
-          outDataQ = dataOut,
           outXFlowSync = xFlowSync,
           transmitWindow,
           updSyncQ,
@@ -602,7 +524,6 @@ class Http2Connection(
           header,
           trailing_header,
           inDataQ = dataIn,
-          outDataQ = dataOut,
           outXFlowSync = xFlowSync,
           transmitWindow,
           updSyncQ,
@@ -824,13 +745,7 @@ class Http2Connection(
           (for {
             rlen <- IO(Math.min(bytesCredit, data_len))
             frames <- IO(splitDataFrames(bb, rlen))
-
-            // _ <- outDataQEventQ.offer(false) >> stream.outDataQ.offer(frames._1.buffer)
-
-            _ <-
-              if (Http2Connection.FAST_MODE == true) sendFrame(frames._1.buffer)
-              else stream.outDataQ.offer(frames._1.buffer) >> outDataQEventQ.offer(false)
-
+            _ <-sendFrame(frames._1.buffer)
             _ <- globalTransmitWindow.update(_ - rlen)
             _ <- stream.transmitWindow.update(_ - rlen)
 
@@ -977,7 +892,6 @@ class Http2Connection(
 
   def closeStream(streamId: Int): IO[Unit] = {
     for {
-      _ <- updateStreamWith(12, streamId, c => c.done.get).whenA(Http2Connection.FAST_MODE == false)
       _ <- IO(concurrentStreams.decrementAndGet())
       // known issue: potentialy it's possible for client to reuse old streamId
       // Something weird about IO.sleep in the current version 50% delay on IO(sleep) creation?, keep original no sleep for now
