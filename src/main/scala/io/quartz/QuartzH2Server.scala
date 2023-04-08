@@ -276,7 +276,7 @@ class QuartzH2Server(
 
       emptyTH <- Deferred[IO, Headers] // no trailing headers for 1.1
       _ <- emptyTH.complete(Headers()) // complete with empty
-      http11request <- IO(Some(Request(id, 1, headers11, res, emptyTH)))
+      http11request <- IO(Some(Request(id, 1, headers11, res, ch.secure(), ch.sniServerNames(), emptyTH)))
       upd = headers11.get("upgrade").getOrElse("")
       _ <- Logger[IO].trace("doConnectUpgrade() - Upgrade = " + upd)
       clientPreface <-

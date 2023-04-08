@@ -4,106 +4,126 @@ import cats.effect.{IO, IOApp, ExitCode, Deferred}
 import fs2.{Stream, Chunk}
 import java.net.URI
 
-/**
- * Represents an HTTP request.
- *
- * @param headers         the request headers
- * @param stream          a stream of request body bytes
- * @param trailingHeaders deferred trailing headers
- */
-sealed case class Request( connId : Long, streamId: Int, headers: Headers, stream: Stream[IO, Byte], trailingHeaders: Deferred[IO, Headers]) {
-  /**
-   * Adds the specified headers to the request headers.
-   *
-   * @param hdr the headers to add
-   * @return a new request with the additional headers
-   */
-  def hdr(hdr: Headers): Request = new Request(connId, streamId, headers ++ hdr, this.stream, this.trailingHeaders)
-  /**
-   * Adds the specified header pair to the request headers.
-   *
-   * @param pair a tuple containing the header name and value
-   * @return a new request with the additional header pair
-   */
-  def hdr(pair: (String, String)): Request = new Request(connId, streamId, headers + pair, this.stream, this.trailingHeaders)
-  /**
-   * Returns the path component of the request URI.
-   *
-   * @return the path component of the request URI
-   */
+/** Represents an HTTP request.
+  *
+  * @param headers
+  *   the request headers
+  * @param stream
+  *   a stream of request body bytes
+  * @param trailingHeaders
+  *   deferred trailing headers
+  */
+sealed case class Request(
+    connId: Long,
+    streamId: Int,
+    headers: Headers,
+    stream: Stream[IO, Byte],
+    secure: Boolean,
+    sniServerNames: Option[Array[String]],
+    trailingHeaders: Deferred[IO, Headers]
+) {
+
+  /** Adds the specified headers to the request headers.
+    *
+    * @param hdr
+    *   the headers to add
+    * @return
+    *   a new request with the additional headers
+    */
+  def hdr(hdr: Headers): Request =
+    new Request(connId, streamId, headers ++ hdr, this.stream, secure, sniServerNames, this.trailingHeaders)
+
+  /** Adds the specified header pair to the request headers.
+    *
+    * @param pair
+    *   a tuple containing the header name and value
+    * @return
+    *   a new request with the additional header pair
+    */
+  def hdr(pair: (String, String)): Request =
+    new Request(connId, streamId, headers + pair, this.stream, secure, sniServerNames, this.trailingHeaders)
+
+  /** Returns the path component of the request URI.
+    *
+    * @return
+    *   the path component of the request URI
+    */
   def path: String = headers.get(":path").getOrElse("")
-  /**
-   * Returns the HTTP method used in the request.
-   *
-   * @return the HTTP method used in the request
-   */
+
+  /** Returns the HTTP method used in the request.
+    *
+    * @return
+    *   the HTTP method used in the request
+    */
   def method: Method = Method(headers.get(":method").getOrElse(""))
-  /**
-   * Returns the content length of the request body as a string.
-   *
-   * @return the content length of the request body as a string
-   */
+
+  /** Returns the content length of the request body as a string.
+    *
+    * @return
+    *   the content length of the request body as a string
+    */
   def contentLen: String = headers.get("content-length").getOrElse("0") // keep it string
-  /**
-   * Returns the URI of the request.
-   *
-   * @return the URI of the request
-   */
+  /** Returns the URI of the request.
+    *
+    * @return
+    *   the URI of the request
+    */
   def uri: URI = new URI(path)
-  /**
-   * Returns the content type of the request body.
-   *
-   * @return the content type of the request body
-   */
+
+  /** Returns the content type of the request body.
+    *
+    * @return
+    *   the content type of the request body
+    */
   def contentType: ContentType = ContentType(headers.get("content-type").getOrElse(""))
 
-  /**
-   * Returns `true` if the content type of the request body is JSON.
-   *
-   * @return `true` if the content type of the request body is JSON
-   */
+  /** Returns `true` if the content type of the request body is JSON.
+    *
+    * @return
+    *   `true` if the content type of the request body is JSON
+    */
   def isJSONBody: Boolean = contentType == ContentType.JSON
 
-  /**
-   * Returns the transfer encoding used in the request.
-   *
-   * @return the transfer encoding used in the request
-   */
+  /** Returns the transfer encoding used in the request.
+    *
+    * @return
+    *   the transfer encoding used in the request
+    */
   def transferEncoding = headers.getMval("transfer-encoding")
 
-  /**
-   * Returns the request body as a byte array.
-   *
-   * @return the request body as a byte array
-   */
+  /** Returns the request body as a byte array.
+    *
+    * @return
+    *   the request body as a byte array
+    */
   def body = stream.compile.toVector.map(_.toArray)
 }
 
-
-/**
- * A companion object for the [[Response]] case class.
- */
+/** A companion object for the [[Response]] case class.
+  */
 object Response {
-  /**
-   * Constructs an HTTP response with a 200 status code and an empty body.
-   *
-   * @return a new HTTP response
-   */
+
+  /** Constructs an HTTP response with a 200 status code and an empty body.
+    *
+    * @return
+    *   a new HTTP response
+    */
   def Ok(): Response = {
     val h = Headers() + (":status", StatusCode.OK.toString)
     new Response(StatusCode.OK, h)
   }
-  /**
-   * Constructs an HTTP response with the specified status code and an empty body.
-   *
-   * @param code the status code for the response
-   * @return a new HTTP response
-   */
+
+  /** Constructs an HTTP response with the specified status code and an empty body.
+    *
+    * @param code
+    *   the status code for the response
+    * @return
+    *   a new HTTP response
+    */
   def Error(code: StatusCode): Response = {
     new Response(code, Headers() + (":status", code.toString))
   }
 }
-
 
 /** Represents an HTTP response, including the response code, headers, and a response body as a `Stream` of bytes.
   * Responses are immutable and can be modified using various helper methods.
