@@ -446,7 +446,6 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
   def ssl_init_h2(): IO[Chunk[Byte]] = {
     for {
-      _ <- IO.println("INIT")
       _ <- f_SSL.setUseClientMode(false)
       sslParameters <- IO(f_SSL.engine.getSSLParameters())
       _ <- IO(

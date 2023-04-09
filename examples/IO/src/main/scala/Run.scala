@@ -85,7 +85,9 @@ object MyApp extends IOApp {
     // perf tests
     case GET -> Root / "test" => IO(Response.Ok())
 
-    case GET -> Root / "example" =>
+    //virtual hosting with TLS SNI.
+    //example with SniHostName passed as parmeter for "!" operator 
+    case "localhost" ! GET -> Root / "example" =>
       // how to send data in separate H2 packets of various size.
       val ts = Stream.emits("Block1\n".getBytes())
       val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
