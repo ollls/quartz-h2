@@ -721,12 +721,14 @@ class Http2Connection(
     val flags = bb.get()
     val streamId = Frames.getStreamId(bb)
 
+    val endStream = if ( (flags & Flags.END_STREAM) != 0 ) true else false
+
     if (requiredLen < len) {
       val buf0 = Array.ofDim[Byte](requiredLen.toInt)
       bb.get(buf0)
 
       val dataFrame1 = Frames.mkDataFrame(streamId, false, padding = 0, ByteBuffer.wrap(buf0))
-      val dataFrame2 = Frames.mkDataFrame(streamId, false, padding = 0, bb)
+      val dataFrame2 = Frames.mkDataFrame(streamId, endStream, padding = 0, bb)
 
       (
         txWindow_SplitDataFrame(dataFrame1, requiredLen.toInt),
