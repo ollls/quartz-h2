@@ -33,14 +33,13 @@ object MyApp extends IOApp {
   var HOME_DIR = "/Users/ostrygun/" // last slash is important!
 
   val R: HttpRouteIO = {
-
-    case req @ GET -> Root / "sninames" =>
+    case req @ GET -> Root / "snihost" =>
       for {
         _ <-
           req.stream.compile.drain // properly ignore incoming data, we must flush it, generaly if you sure there will be no data, you can ignore.
         result_text <- IO(req.sniServerNames match {
           case Some(hosts) => s"Host names in TLS SNI extension: ${hosts.mkString(",")}"
-          case None        => "No TLS SNI host names provided or unsecured connection"
+          case None        => "No TLS SNI host names provided or unsecure connection"
         })
       } yield (Response.Ok().asText(result_text))
 
