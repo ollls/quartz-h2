@@ -130,7 +130,10 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   // prealoc carryover buffer, position getting saved between calls
   private[this] val IN_J_BUFFER = java.nio.ByteBuffer.allocate(TLS_PACKET_SZ * MULTIPLER)
 
-  override def sniServerNames(): Option[Array[String]] = Some(sni_hosts.toArray)
+  override def sniServerNames(): Option[Array[String]] = {
+    if( sni_hosts.size == 0 ) None
+    else Some(sni_hosts.toArray)
+  }  
 
   private[this] def doHandshakeClient() = {
     // val BUFF_SZ = ssl_engine.engine.getSession().getPacketBufferSize()

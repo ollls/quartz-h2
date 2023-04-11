@@ -68,7 +68,7 @@ object Http2Connection {
       _ <- Logger[IO].debug("Http2Connection.make()")
       shutdownPromise <- Deferred[IO, Boolean]
 
-      //1024 perf buffer
+      // 1024 perf buffer
       outq <- Dequeue.bounded[IO, ByteBuffer](1024)
       http11Req_ref <- Ref[IO].of[Option[Request]](http11request)
 
@@ -77,7 +77,7 @@ object Http2Connection {
       globalTransmitWindow <- Ref[IO].of[Long](65535) // (default_server_settings.INITIAL_WINDOW_SIZE)
       globalInboundWindow <- Ref[IO].of(65535L) // (default_server_settings.INITIAL_WINDOW_SIZE)
 
-      globalBytesOfPendingInboundData <- Ref[IO].of(0)
+      globalBytesOfPendingInboundData <- Ref[IO].of(0L)
       runMe2 = outBoundWorkerProc(ch, outq, shutdownPromise)
         .handleErrorWith(e => Logger[IO].debug("outBoundWorkerProc fiber: " + e.toString()))
         .iterateUntil(_ == true)
@@ -116,87 +116,46 @@ object Http2Connection {
     (len, frameType, flags, streamId)
   }
 
-  private[this] def dataEvalEffectProducer(
-      c: Http2Connection,
-      q: Queue[IO, ByteBuffer]
-  ): IO[ByteBuffer] = {
+  private[this] def windowsUpdate(
+      c: Http2ConnectionCommon,
+      streamId: Int,
+      received: Ref[IO, Long],
+      window: Ref[IO, Long]
+  ) =
     for {
-      bb <- q.take
-      _ <- IO
-        .raiseError(java.nio.channels.ClosedChannelException())
-        .whenA(bb == null)
-      tp <- IO(parseFrame(bb))
-      streamId = tp._4
-      len = tp._1
-
-      o_stream <- IO(c.streamTbl.get(streamId))
-      _ <- IO
-        .raiseError(
-          ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")
-        )
-        .whenA(o_stream.isEmpty)
-      stream <- IO(o_stream.get)
-
-      ////////////////////////////////////////////////
-      // global counter with Window Update.
-      // now we track both global and local during request.stream processing
-      // globalBytesOfPendingInboundData shared reference betweem streams
-      //////////////////////////////////////////////
-      _ <- c.decrementGlobalPendingInboundData(len)
-      bytes_pending <- c.globalBytesOfPendingInboundData.get
-      bytes_available <- c.globalInboundWindow.get
-      globalWinIncrement <- IO {
-        if (c.INITIAL_WINDOW_SIZE > bytes_pending) c.INITIAL_WINDOW_SIZE - bytes_pending
-        else c.INITIAL_WINDOW_SIZE
-      }
-      _ <- c
-        .sendFrame(Frames.mkWindowUpdateFrame(0, globalWinIncrement))
-        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
-
-      _ <- c.globalInboundWindow
-        .update(_ + globalWinIncrement)
-        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
-
-      _ <- Logger[IO]
-        .debug(s"Send WINDOW UPDATE global $globalWinIncrement $bytes_available")
-        .whenA(globalWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3)
-      //////////////////////////////////////////////
-      // local counter
-      _ <- c.updateStreamWith(
-        0,
-        streamId,
-        c => c.bytesOfPendingInboundData.update(_ - len)
+      bytes_received <- received.get
+      bytes_available <- window.get
+      send_update <- IO(
+        bytes_received < c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3
       )
+      upd = c.INITIAL_WINDOW_SIZE - bytes_available.toInt
+      _ <- (c.sendFrame(Frames.mkWindowUpdateFrame(streamId, upd)) *> window
+        .update(_ + upd) *> Logger[IO].debug(s"Send UPDATE_WINDOW $upd streamId= $streamId")).whenA(send_update)
+    } yield (send_update)
 
-      bytes_available_per_stream <- stream.inboundWindow.get
+  def dataEvalEffectProducer(
+      c: Http2ConnectionCommon,
+      q: Queue[IO, ByteBuffer]
+  ): IO[ByteBuffer] = for {
+    bb <- q.take
+    _ <- IO.raiseError(java.nio.channels.ClosedChannelException()).whenA(bb == null)
+    tp <- IO(parseFrame(bb))
+    streamId = tp._4
+    len = tp._1
+    o_stream <- IO(c.getStream((streamId)))
+    _ <- IO.raiseError(ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")).whenA(o_stream.isEmpty)
+    stream: Http2StreamCommon <- IO(o_stream.get)
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      bytes_pending_per_stream <- c.globalBytesOfPendingInboundData.get
-      streamWinIncrement <- IO {
-        if (c.INITIAL_WINDOW_SIZE > bytes_pending_per_stream) c.INITIAL_WINDOW_SIZE - bytes_pending_per_stream
-        else c.INITIAL_WINDOW_SIZE
-      }
-      _ <-
-        if (
-          streamWinIncrement > c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available_per_stream < c.INITIAL_WINDOW_SIZE * 0.3
-        ) {
-          Logger[IO].debug(
-            s"Send WINDOW UPDATE local on processing incoming data=$streamWinIncrement localWin=$bytes_available_per_stream"
-          ) >> c
-            .sendFrame(
-              Frames.mkWindowUpdateFrame(
-                streamId,
-                if (streamWinIncrement > 0) streamWinIncrement else c.INITIAL_WINDOW_SIZE
-              )
-            ) >>
-            stream.inboundWindow.update(_ + streamWinIncrement)
-        } else {
-          Logger[IO].trace(
-            ">>>>>>>>>> still processing incoming data, pause remote, pending data = " + bytes_pending_per_stream
-          ) >> IO.unit
-        }
+    _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow)
+    _ <- c.globalBytesOfPendingInboundData.update(_ - len)
+    _ <- c.globalInboundWindow.update(_ - len)
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+    _ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow)
+    _ <- stream.bytesOfPendingInboundData.update(_ - len)
+    _ <- stream.inboundWindow.update(_ - len)
 
-    } yield (bb)
-  }
+  } yield (bb)
 
   private[this] def makeDataStream(c: Http2Connection, q: Queue[IO, ByteBuffer]) = {
     val dataStream0 = Stream.eval(dataEvalEffectProducer(c, q)).repeat.takeThrough { buffer =>
@@ -258,42 +217,51 @@ object Http2Connection {
     go(s0 ++ s1, Chunk.empty[Byte]).stream.chunks
   }
 }
-case class Http2Stream(
+
+trait Http2StreamCommon(val bytesOfPendingInboundData: Ref[IO, Long], val inboundWindow: Ref[IO, Long])
+class Http2Stream(
     active: Ref[IO, Boolean],
-    d: Deferred[IO, Headers],
-    header: ArrayBuffer[ByteBuffer],
-    trailing_header: ArrayBuffer[ByteBuffer],
-    inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
-    outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
-    transmitWindow: Ref[IO, Long],
+    val d: Deferred[IO, Headers],
+    val header: ArrayBuffer[ByteBuffer],
+    val trailing_header: ArrayBuffer[ByteBuffer],
+    val inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
+    val outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
+    val transmitWindow: Ref[IO, Long],
     syncUpdateWindowQ: Queue[IO, Unit],
-    bytesOfPendingInboundData: Ref[IO, Int], // metric
+    bytesOfPendingInboundData: Ref[IO, Long], // metric
     inboundWindow: Ref[IO, Long],
-    contentLenFromHeader: Deferred[IO, Option[Int]],
-    trailingHeader: Deferred[IO, Headers],
-    done: Deferred[IO, Unit]
-) {
+    val contentLenFromHeader: Deferred[IO, Option[Int]],
+    val trailingHeader: Deferred[IO, Headers],
+    val done: Deferred[IO, Unit]
+) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow) {
   var endFlag = false // half-closed if true
   var endHeadersFlag = false
   var contentLenFromDataFrames = 0
-
 }
 
+trait Http2ConnectionCommon(
+    val INITIAL_WINDOW_SIZE: Int,
+    val globalBytesOfPendingInboundData: Ref[IO, Long],
+    val globalInboundWindow: Ref[IO, Long]
+) {
+  def sendFrame(b: ByteBuffer): IO[Unit]
+  def getStream(id: Int): Option[Http2StreamCommon]
+}
 class Http2Connection(
     ch: IOChannel,
     val id: Long,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
-    outq: Queue[IO, ByteBuffer],
+    val outq: Queue[IO, ByteBuffer],
     globalTransmitWindow: Ref[IO, Long],
-    val globalBytesOfPendingInboundData: Ref[IO, Int], // metric
-    val globalInboundWindow: Ref[IO, Long],
+    globalBytesOfPendingInboundData: Ref[IO, Long], // metric
+    globalInboundWindow: Ref[IO, Long],
     shutdownD: Deferred[IO, Boolean],
     hSem: Semaphore[IO],
     MAX_CONCURRENT_STREAMS: Int,
     HTTP2_KEEP_ALIVE_MS: Int,
-    val INITIAL_WINDOW_SIZE: Int
-) {
+    INITIAL_WINDOW_SIZE: Int
+) extends Http2ConnectionCommon(INITIAL_WINDOW_SIZE, globalBytesOfPendingInboundData, globalInboundWindow) {
 
   val settings: Http2Settings = new Http2Settings()
   val settings_client = new Http2Settings()
@@ -310,6 +278,7 @@ class Http2Connection(
   val headerDecoder = new HeaderDecoder(settings.MAX_HEADER_LIST_SIZE, settings.HEADER_TABLE_SIZE)
 
   val streamTbl = java.util.concurrent.ConcurrentHashMap[Int, Http2Stream](100).asScala
+  def getStream(id: Int): Option[Http2StreamCommon] = streamTbl.get(id)
 
   // var statRefresh = 0
 
@@ -319,8 +288,7 @@ class Http2Connection(
     globalBytesOfPendingInboundData.update(_ + increment)
 
   def shutdown: IO[Unit] =
-     outq.offer(null) >> shutdownD.get.void >> Logger[IO].error("Http2Connection.shutdown") 
-
+    outq.offer(null) >> shutdownD.get.void >> Logger[IO].error("Http2Connection.shutdown")
 
   /*
     When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
@@ -448,7 +416,7 @@ class Http2Connection(
       localInboundWindowSize <- Ref[IO].of[Long](65535)
 
       updSyncQ <- Queue.dropping[IO, Unit](1)
-      pendingInBytes <- Ref[IO].of(0)
+      pendingInBytes <- Ref[IO].of(0L)
       active <- Ref[IO].of(true)
 
       c <- IO(
@@ -513,7 +481,7 @@ class Http2Connection(
         .whenA(INITIAL_WINDOW_SIZE > 65535L)
 
       updSyncQ <- Queue.dropping[IO, Unit](1)
-      pendingInBytes <- Ref[IO].of(0)
+      pendingInBytes <- Ref[IO].of(0L)
 
       active <- Ref[IO].of(true)
 
@@ -613,11 +581,8 @@ class Http2Connection(
       c <- IO(o_c.get)
       _ <- IO(c.contentLenFromDataFrames += dataSize)
 
-      localWin_sz <- c.inboundWindow.get
-      _ <- this.globalInboundWindow.update(_ - dataSize) >>
-        this.incrementGlobalPendingInboundData(dataSize) >>
-        c.inboundWindow.update(_ - dataSize) >>
-        c.bytesOfPendingInboundData.update(_ + dataSize)
+      _ <- this.incrementGlobalPendingInboundData(dataSize)
+      _ <- c.bytesOfPendingInboundData.update(_ + dataSize)
 
       _ <- c.inDataQ.offer(bb)
 
@@ -721,7 +686,7 @@ class Http2Connection(
     val flags = bb.get()
     val streamId = Frames.getStreamId(bb)
 
-    val endStream = if ( (flags & Flags.END_STREAM) != 0 ) true else false
+    val endStream = if ((flags & Flags.END_STREAM) != 0) true else false
 
     if (requiredLen < len) {
       val buf0 = Array.ofDim[Byte](requiredLen.toInt)
@@ -749,7 +714,7 @@ class Http2Connection(
           (for {
             rlen <- IO(Math.min(bytesCredit, data_len))
             frames <- IO(splitDataFrames(bb, rlen))
-            _ <-sendFrame(frames._1.buffer)
+            _ <- sendFrame(frames._1.buffer)
             _ <- globalTransmitWindow.update(_ - rlen)
             _ <- stream.transmitWindow.update(_ - rlen)
 
@@ -835,8 +800,10 @@ class Http2Connection(
             _ <- Logger[IO].trace(
               s"Send response code: ${response.code.toString()} only header = $endStreamInHeaders"
             )
-           
-            _ <- Logger[IO].info(s"H2 stream = $streamId ${request.method.name} ${request.path} ${response.code.toString()}")
+
+            _ <- Logger[IO].info(
+              s"H2 stream = $streamId ${request.method.name} ${request.path} ${response.code.toString()}"
+            )
 
             _ <- hSem.acquire.bracket { _ =>
               headerFrame(streamId, Priority.NoPriority, endStreamInHeaders, response.headers)
@@ -875,7 +842,9 @@ class Http2Connection(
             o44 <- IO(Response.Error(StatusCode.NotFound)) // 404
             _ <- Logger[IO].trace("response.headers: " + o44.headers.printHeaders(" | "))
             _ <- Logger[IO].trace(s"Send response code: ${o44.code.toString()}")
-            _ <- Logger[IO].error(s"H2 stream = $streamId ${request.method.name} ${request.path} ${o44.code.toString()}")
+            _ <- Logger[IO].error(
+              s"H2 stream = $streamId ${request.method.name} ${request.path} ${o44.code.toString()}"
+            )
             _ <- hSem.acquire.bracket { _ =>
               for {
                 bb2 <- IO(headerFrame(streamId, Priority.NoPriority, true, o44.headers))
