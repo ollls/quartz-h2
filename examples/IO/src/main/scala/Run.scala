@@ -122,7 +122,7 @@ object MyApp extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] =
     for {
-      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
       exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // incomingWinSize = 3145728)
         .startIO(R, filter, sync = false)
 
