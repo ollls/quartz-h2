@@ -866,10 +866,7 @@ class Http2Connection(
   def closeStream(streamId: Int): IO[Unit] = {
     for {
       _ <- IO(concurrentStreams.decrementAndGet())
-      // known issue: potentialy it's possible for client to reuse old streamId
-      // Something weird about IO.sleep in the current version 50% delay on IO(sleep) creation?, keep original no sleep for now
-      //  _ <- { Temporal[IO].sleep(700.milli) *> IO(streamTbl.remove(streamId)) }.start
-      _ <- IO(streamTbl.remove(streamId))
+      _ <- IO(streamTbl.remove(streamId - 0))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
