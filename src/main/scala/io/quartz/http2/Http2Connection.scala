@@ -105,7 +105,7 @@ object Http2Connection {
     } yield c
   }
 
-  private[this] def parseFrame(bb: ByteBuffer) = {
+  def parseFrame(bb: ByteBuffer) = {
     val sbb = bb.slice();
 
     val len = Frames.getLengthField(sbb)
@@ -157,7 +157,7 @@ object Http2Connection {
 
   } yield (bb)
 
-  private[this] def makeDataStream(c: Http2Connection, q: Queue[IO, ByteBuffer]) = {
+  def makeDataStream(c: Http2ConnectionCommon, q: Queue[IO, ByteBuffer]) = {
     val dataStream0 = Stream.eval(dataEvalEffectProducer(c, q)).repeat.takeThrough { buffer =>
       val len = Frames.getLengthField(buffer)
       val frameType = buffer.get()
@@ -176,7 +176,7 @@ object Http2Connection {
 
   }
 
-  private[this] def makePacketStream(
+  def makePacketStream(
       ch: IOChannel,
       keepAliveMs: Int,
       leftOver: Chunk[Byte]
@@ -218,22 +218,27 @@ object Http2Connection {
   }
 }
 
-trait Http2StreamCommon(val bytesOfPendingInboundData: Ref[IO, Long], val inboundWindow: Ref[IO, Long])
+trait Http2StreamCommon(
+    val bytesOfPendingInboundData: Ref[IO, Long],
+    val inboundWindow: Ref[IO, Long],
+    val transmitWindow: Ref[IO, Long],
+    val outXFlowSync: Queue[IO, Unit]
+)
 class Http2Stream(
     active: Ref[IO, Boolean],
     val d: Deferred[IO, Headers],
     val header: ArrayBuffer[ByteBuffer],
     val trailing_header: ArrayBuffer[ByteBuffer],
     val inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
-    val outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
-    val transmitWindow: Ref[IO, Long],
+    outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
+    transmitWindow: Ref[IO, Long],
     syncUpdateWindowQ: Queue[IO, Unit],
     bytesOfPendingInboundData: Ref[IO, Long], // metric
     inboundWindow: Ref[IO, Long],
     val contentLenFromHeader: Deferred[IO, Option[Int]],
     val trailingHeader: Deferred[IO, Headers],
     val done: Deferred[IO, Unit]
-) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow) {
+) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow, transmitWindow, outXFlowSync) {
   var endFlag = false // half-closed if true
   var endHeadersFlag = false
   var contentLenFromDataFrames = 0
@@ -242,17 +247,191 @@ class Http2Stream(
 trait Http2ConnectionCommon(
     val INITIAL_WINDOW_SIZE: Int,
     val globalBytesOfPendingInboundData: Ref[IO, Long],
-    val globalInboundWindow: Ref[IO, Long]
+    val globalInboundWindow: Ref[IO, Long],
+    val globalTransmitWindow: Ref[IO, Long],
+    val outq: Queue[IO, ByteBuffer]
 ) {
-  def sendFrame(b: ByteBuffer): IO[Unit]
+  case class txWindow_SplitDataFrame(buffer: ByteBuffer, dataLen: Int)
+
+  def takeSlice(buf: ByteBuffer, len: Int): ByteBuffer = {
+    val head = buf.slice.limit(len)
+    buf.position(len)
+    head
+  }
+
+  def headerFrame(
+      streamId: Int,
+      settings: Http2Settings,
+      priority: Priority,
+      endStream: Boolean,
+      headerEncoder: HeaderEncoder,
+      headers: Headers
+  ): Seq[ByteBuffer] = {
+    val rawHeaders = headerEncoder.encodeHeaders(headers)
+
+    val limit = settings.MAX_FRAME_SIZE - 61
+
+    val headersPrioritySize =
+      if (priority.isDefined) 5 else 0 // priority(4) + weight(1), padding = 0
+
+    if (rawHeaders.remaining() + headersPrioritySize <= limit) {
+      val acc = new ArrayBuffer[ByteBuffer]
+      acc.addOne(
+        Frames.mkHeaderFrame(
+          streamId,
+          priority,
+          endHeaders = true,
+          endStream,
+          padding = 0,
+          rawHeaders
+        )
+      )
+
+      acc.toSeq
+    } else {
+      // need to fragment
+      val acc = new ArrayBuffer[ByteBuffer]
+
+      val headersBuf = takeSlice(rawHeaders, limit - headersPrioritySize)
+      acc += Frames.mkHeaderFrame(
+        streamId,
+        priority,
+        endHeaders = false,
+        endStream,
+        padding = 0,
+        headersBuf
+      )
+
+      while (rawHeaders.hasRemaining) {
+        val size = math.min(limit, rawHeaders.remaining)
+        val continueBuf = takeSlice(rawHeaders, size)
+        val endHeaders = !rawHeaders.hasRemaining
+        acc += Frames.mkContinuationFrame(streamId, endHeaders, continueBuf)
+      }
+      acc.toSeq
+    }
+  }
+
+  def sendFrame(b: ByteBuffer) = outq.offer(b)
+
+  def splitDataFrames(
+      bb: ByteBuffer,
+      requiredLen: Long
+  ): (txWindow_SplitDataFrame, Option[txWindow_SplitDataFrame]) = {
+    val original_bb = bb.slice()
+    val len = Frames.getLengthField(bb)
+    val frameType = bb.get()
+    val flags = bb.get()
+    val streamId = Frames.getStreamId(bb)
+
+    val endStream = if ((flags & Flags.END_STREAM) != 0) true else false
+
+    if (requiredLen < len) {
+      val buf0 = Array.ofDim[Byte](requiredLen.toInt)
+      bb.get(buf0)
+
+      val dataFrame1 = Frames.mkDataFrame(streamId, false, padding = 0, ByteBuffer.wrap(buf0))
+      val dataFrame2 = Frames.mkDataFrame(streamId, endStream, padding = 0, bb)
+
+      (
+        txWindow_SplitDataFrame(dataFrame1, requiredLen.toInt),
+        Some(txWindow_SplitDataFrame(dataFrame2, len - requiredLen.toInt))
+      )
+
+    } else (txWindow_SplitDataFrame(original_bb, len), None)
+  }
+
+  def txWindow_Transmit(stream: Http2StreamCommon, bb: ByteBuffer, data_len: Int): IO[Long] = {
+    for {
+      tx_g <- globalTransmitWindow.get
+      tx_l <- stream.transmitWindow.get
+      bytesCredit <- IO(Math.min(tx_g, tx_l))
+
+      _ <-
+        if (bytesCredit > 0)
+          (for {
+            rlen <- IO(Math.min(bytesCredit, data_len))
+            frames <- IO(splitDataFrames(bb, rlen))
+            _ <- sendFrame(frames._1.buffer)
+            _ <- globalTransmitWindow.update(_ - rlen)
+            _ <- stream.transmitWindow.update(_ - rlen)
+
+            _ <- frames._2 match {
+              case Some(f0) =>
+                stream.outXFlowSync.take >> txWindow_Transmit(stream, f0.buffer, f0.dataLen)
+              case None => IO.unit
+            }
+
+          } yield ())
+        else stream.outXFlowSync.take >> txWindow_Transmit(stream, bb, data_len)
+
+    } yield (bytesCredit)
+  }
+
+  /** Generate stream data frame(s) for the specified data
+    *
+    * If the data exceeds the peers MAX_FRAME_SIZE setting, it is fragmented into a series of frames.
+    */
+  def dataFrame(
+      sts: Http2Settings,
+      streamId: Int,
+      endStream: Boolean,
+      data: ByteBuffer
+  ): scala.collection.immutable.Seq[ByteBuffer] = {
+    val limit =
+      sts.MAX_FRAME_SIZE - 128
+
+    if (data.remaining <= limit) {
+
+      val acc = new ArrayBuffer[ByteBuffer]
+      acc.addOne(Frames.mkDataFrame(streamId, endStream, padding = 0, data))
+
+      acc.toSeq
+    } else { // need to fragment
+      // println("FRAGMENT - SHOULD NOT BE THERE")
+      val acc = new ArrayBuffer[ByteBuffer]
+
+      while (data.hasRemaining) {
+
+        val len = math.min(data.remaining(), limit)
+
+        val cur_pos = data.position()
+
+        val thisData = data.slice.limit(len)
+
+        data.position(cur_pos + len)
+
+        val eos = endStream && !data.hasRemaining
+        acc.addOne(Frames.mkDataFrame(streamId, eos, padding = 0, thisData))
+      }
+      // acc.foreach(c => println("------>" + c.limit()))
+      acc.toSeq
+    }
+  }
+
+  def sendDataFrame(streamId: Int, bb: ByteBuffer): IO[Unit] =
+    for {
+      t <- IO(Http2Connection.parseFrame(bb))
+      len = t._1
+      _ <- Logger[IO].trace(s"sendDataFrame() - $len bytes")
+      opt_D <- IO(getStream(streamId))
+      _ <- opt_D match {
+        case Some(ce) =>
+          for {
+            _ <- txWindow_Transmit(ce, bb, len)
+          } yield ()
+        case None => Logger[IO].error("sendDataFrame lost streamId")
+      }
+    } yield ()
   def getStream(id: Int): Option[Http2StreamCommon]
 }
+
 class Http2Connection(
     ch: IOChannel,
     val id: Long,
     httpRoute: Request => IO[Option[Response]],
     httpReq11: Ref[IO, Option[Request]],
-    val outq: Queue[IO, ByteBuffer],
+    outq: Queue[IO, ByteBuffer],
     globalTransmitWindow: Ref[IO, Long],
     globalBytesOfPendingInboundData: Ref[IO, Long], // metric
     globalInboundWindow: Ref[IO, Long],
@@ -261,7 +440,13 @@ class Http2Connection(
     MAX_CONCURRENT_STREAMS: Int,
     HTTP2_KEEP_ALIVE_MS: Int,
     INITIAL_WINDOW_SIZE: Int
-) extends Http2ConnectionCommon(INITIAL_WINDOW_SIZE, globalBytesOfPendingInboundData, globalInboundWindow) {
+) extends Http2ConnectionCommon(
+      INITIAL_WINDOW_SIZE,
+      globalBytesOfPendingInboundData,
+      globalInboundWindow,
+      globalTransmitWindow,
+      outq
+    ) {
 
   val settings: Http2Settings = new Http2Settings()
   val settings_client = new Http2Settings()
@@ -674,80 +859,6 @@ class Http2Connection(
     } yield (b)
   }
 
-  case class txWindow_SplitDataFrame(buffer: ByteBuffer, dataLen: Int)
-
-  private[this] def splitDataFrames(
-      bb: ByteBuffer,
-      requiredLen: Long
-  ): (txWindow_SplitDataFrame, Option[txWindow_SplitDataFrame]) = {
-    val original_bb = bb.slice()
-    val len = Frames.getLengthField(bb)
-    val frameType = bb.get()
-    val flags = bb.get()
-    val streamId = Frames.getStreamId(bb)
-
-    val endStream = if ((flags & Flags.END_STREAM) != 0) true else false
-
-    if (requiredLen < len) {
-      val buf0 = Array.ofDim[Byte](requiredLen.toInt)
-      bb.get(buf0)
-
-      val dataFrame1 = Frames.mkDataFrame(streamId, false, padding = 0, ByteBuffer.wrap(buf0))
-      val dataFrame2 = Frames.mkDataFrame(streamId, endStream, padding = 0, bb)
-
-      (
-        txWindow_SplitDataFrame(dataFrame1, requiredLen.toInt),
-        Some(txWindow_SplitDataFrame(dataFrame2, len - requiredLen.toInt))
-      )
-
-    } else (txWindow_SplitDataFrame(original_bb, len), None)
-  }
-
-  private[this] def txWindow_Transmit(stream: Http2Stream, bb: ByteBuffer, data_len: Int): IO[Long] = {
-    for {
-      tx_g <- globalTransmitWindow.get
-      tx_l <- stream.transmitWindow.get
-      bytesCredit <- IO(Math.min(tx_g, tx_l))
-
-      _ <-
-        if (bytesCredit > 0)
-          (for {
-            rlen <- IO(Math.min(bytesCredit, data_len))
-            frames <- IO(splitDataFrames(bb, rlen))
-            _ <- sendFrame(frames._1.buffer)
-            _ <- globalTransmitWindow.update(_ - rlen)
-            _ <- stream.transmitWindow.update(_ - rlen)
-
-            _ <- frames._2 match {
-              case Some(f0) =>
-                stream.outXFlowSync.take >> txWindow_Transmit(stream, f0.buffer, f0.dataLen)
-              case None => IO.unit
-            }
-
-          } yield ())
-        else stream.outXFlowSync.take >> txWindow_Transmit(stream, bb, data_len)
-
-    } yield (bytesCredit)
-  }
-
-  def sendDataFrame(streamId: Int, bb: ByteBuffer): IO[Unit] =
-    for {
-      t <- IO(Http2Connection.parseFrame(bb))
-      len = t._1
-      _ <- Logger[IO].trace(s"sendDataFrame() - $len bytes")
-      opt_D <- IO(streamTbl.get(streamId))
-      _ <- opt_D match {
-        case Some(ce) =>
-          for {
-            _ <- txWindow_Transmit(ce, bb, len)
-          } yield ()
-        case None => Logger[IO].error("sendDataFrame lost streamId")
-      }
-    } yield ()
-
-  def sendFrame(b: ByteBuffer) = outq.offer(b)
-  ////////////////////////////////////////////
-
   def route(request: Request): IO[Response] = for {
 
     v <- request.stream.compile.toVector
@@ -806,7 +917,7 @@ class Http2Connection(
             )
 
             _ <- hSem.acquire.bracket { _ =>
-              headerFrame(streamId, Priority.NoPriority, endStreamInHeaders, response.headers)
+              headerFrame(streamId, settings, Priority.NoPriority, endStreamInHeaders, headerEncoder, response.headers)
                 .traverse(b => sendFrame(b))
             }(_ => hSem.release)
 
@@ -816,7 +927,7 @@ class Http2Connection(
               .foreach { chunk =>
                 for {
                   chunk0 <- pref.get
-                  _ <- dataFrame(streamId, false, chunk0.toByteBuffer)
+                  _ <- dataFrame(settings, streamId, false, chunk0.toByteBuffer)
                     .traverse(b => sendDataFrame(streamId, b))
                     .whenA(chunk0.nonEmpty)
                   _ <- pref.set(chunk)
@@ -828,7 +939,7 @@ class Http2Connection(
               .whenA(endStreamInHeaders == false)
 
             lastChunk <- pref.get
-            _ <- dataFrame(streamId, true, lastChunk.toByteBuffer)
+            _ <- dataFrame(settings, streamId, true, lastChunk.toByteBuffer)
               .traverse(b => sendDataFrame(streamId, b))
               .whenA(endStreamInHeaders == false)
               .void
@@ -847,7 +958,7 @@ class Http2Connection(
             )
             _ <- hSem.acquire.bracket { _ =>
               for {
-                bb2 <- IO(headerFrame(streamId, Priority.NoPriority, true, o44.headers))
+                bb2 <- IO(headerFrame(streamId, settings, Priority.NoPriority, true, headerEncoder, o44.headers))
                 _ <- bb2.traverse(b => sendFrame(b))
                 _ <- updateStreamWith(10, streamId, c => c.done.complete(()).void)
 
@@ -866,98 +977,10 @@ class Http2Connection(
   def closeStream(streamId: Int): IO[Unit] = {
     for {
       _ <- IO(concurrentStreams.decrementAndGet())
-      _ <- IO(streamTbl.remove(streamId - 0))
+      _ <- IO(streamTbl.remove(streamId)) //- Http2Connection.STREAM_PURGE_DELAY))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
-  }
-
-  /** Generate stream data frame(s) for the specified data
-    *
-    * If the data exceeds the peers MAX_FRAME_SIZE setting, it is fragmented into a series of frames.
-    */
-  def dataFrame(
-      streamId: Int,
-      endStream: Boolean,
-      data: ByteBuffer
-  ): scala.collection.immutable.Seq[ByteBuffer] = {
-    val limit =
-      settings.MAX_FRAME_SIZE - 128
-
-    if (data.remaining <= limit) {
-
-      val acc = new ArrayBuffer[ByteBuffer]
-      acc.addOne(Frames.mkDataFrame(streamId, endStream, padding = 0, data))
-
-      acc.toSeq
-    } else { // need to fragment
-      // println("FRAGMENT - SHOULD NOT BE THERE")
-      val acc = new ArrayBuffer[ByteBuffer]
-
-      while (data.hasRemaining) {
-
-        val len = math.min(data.remaining(), limit)
-
-        val cur_pos = data.position()
-
-        val thisData = data.slice.limit(len)
-
-        data.position(cur_pos + len)
-
-        val eos = endStream && !data.hasRemaining
-        acc.addOne(Frames.mkDataFrame(streamId, eos, padding = 0, thisData))
-      }
-      // acc.foreach(c => println("------>" + c.limit()))
-      acc.toSeq
-    }
-  }
-
-  def takeSlice(buf: ByteBuffer, len: Int): ByteBuffer = {
-    val head = buf.slice.limit(len)
-    buf.position(len)
-    head
-  }
-
-  /** Generate stream header frames from the provided header sequence
-    *
-    * If the compressed representation of the headers exceeds the MAX_FRAME_SIZE setting of the peer, it will be broken
-    * into a HEADERS frame and a series of CONTINUATION frames.
-    */
-  // BROKEN TODO TODO!!!
-  //////////////////////////////
-  def headerFrame( // TODOD pbly not working for multi-packs
-      streamId: Int,
-      priority: Priority,
-      endStream: Boolean,
-      headers: Headers
-  ): scala.collection.immutable.Seq[ByteBuffer] = {
-    val rawHeaders = headerEncoder.encodeHeaders(headers)
-
-    val limit = settings.MAX_FRAME_SIZE - 61
-
-    val headersPrioritySize =
-      if (priority.isDefined) 5 else 0 // priority(4) + weight(1), padding = 0
-
-    if (rawHeaders.remaining() + headersPrioritySize <= limit) {
-      val acc = new ArrayBuffer[ByteBuffer]
-      acc.addOne(Frames.mkHeaderFrame(streamId, priority, endHeaders = true, endStream, padding = 0, rawHeaders))
-
-      acc.toSeq
-    } else {
-      // need to fragment
-      val acc = new ArrayBuffer[ByteBuffer]
-
-      val headersBuf = takeSlice(rawHeaders, limit - headersPrioritySize)
-      acc += Frames.mkHeaderFrame(streamId, priority, endHeaders = false, endStream, padding = 0, headersBuf)
-
-      while (rawHeaders.hasRemaining) {
-        val size = math.min(limit, rawHeaders.remaining)
-        val continueBuf = takeSlice(rawHeaders, size)
-        val endHeaders = !rawHeaders.hasRemaining
-        acc += Frames.mkContinuationFrame(streamId, endHeaders, continueBuf)
-      }
-      acc.toSeq
-    }
   }
 
   def processIncoming(leftOver: Chunk[Byte]): IO[Unit] = (for {
