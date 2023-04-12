@@ -1,29 +1,25 @@
 package io.quartz.http2
 
-import io.quartz.netio.IOChannel
-import cats.effect.IO
-import fs2.Chunk
-import fs2.{Stream, Pull}
-import cats.effect.{Fiber, Ref}
+import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
+import java.net.URI
+import cats.implicits._
+import fs2.{Stream, Pull, Chunk}
+import cats.effect.{IO,Fiber, Ref}
 import cats.effect.std.Queue
 import java.nio.ByteBuffer
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 import io.quartz.http2.Constants._
 import cats.effect.std.Semaphore
 import cats.effect.Deferred
-import io.quartz.http2.model.Headers
+
+import io.quartz.http2.model.{Headers, Method, StatusCode}
+import io.quartz.netio.IOChannel
 import io.quartz.http2.model.Method._
-import io.quartz.http2.model.Method
 import io.quartz.http2.HeaderEncoder
-import scala.collection.mutable.ArrayBuffer
-import cats.implicits._
-import cats.syntax.all._
-import io.quartz.http2.model.StatusCode
 import concurrent.duration.DurationInt
-import java.net.URI
-import scala.jdk.CollectionConverters.*
+
 
 case class ClientResponse(
     status: StatusCode,
@@ -45,7 +41,7 @@ object Http2ClientConnection {
     * @return
     *   a Fiber that represents the running computation
     */
-  def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
+  private def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
     bb <- outq.take
     _ <- ch.write(bb)
   } yield ()).handleErrorWith(e => Logger[IO].error("Client: outBoundWorker - " + e.toString()))
@@ -158,7 +154,7 @@ class Http2ClientConnection(
 
   def getStream(id: Int): Option[Http2StreamCommon] = streamTbl.get(id)
 
-  private def openStream(streamId: Int, in_win: Int) = (for {
+  private[this] def openStream(streamId: Int, in_win: Int) = (for {
     d <- Deferred[IO, (Byte, Headers)]
     inboundWindow <- Ref[IO].of[Long](in_win)
     header <- IO(ArrayBuffer.empty[ByteBuffer])
@@ -186,7 +182,7 @@ class Http2ClientConnection(
   private[this] def incrementGlobalPendingInboundData(increment: Int) =
     globalBytesOfPendingInboundData.update(_ + increment)
 
-  private def triggerStreamRst(streamId: Int, flags: Byte) = {
+  private[this] def triggerStreamRst(streamId: Int, flags: Byte) = {
     updateStreamWith(
       5,
       streamId,
@@ -197,7 +193,7 @@ class Http2ClientConnection(
     )
   }
 
-  private def triggerStream(streamId: Int, flags: Byte): IO[Unit] = {
+  private[this] def triggerStream(streamId: Int, flags: Byte): IO[Unit] = {
     updateStreamWith(
       5,
       streamId,
@@ -210,7 +206,7 @@ class Http2ClientConnection(
     )
   }
 
-  private def accumHeaders(streamId: Int, bb: ByteBuffer): IO[Unit] =
+  private[this] def accumHeaders(streamId: Int, bb: ByteBuffer): IO[Unit] =
     updateStreamWith(2, streamId, c => IO(c.header.addOne(bb)))
 
   private def updateStreamWith(
@@ -233,9 +229,7 @@ class Http2ClientConnection(
 
   }
 
-  def settings = settings1.get
-
-  def inBoundWorker(ch: IOChannel, timeOutMs: Int) =
+  private[this] def inBoundWorker(ch: IOChannel, timeOutMs: Int) =
     Http2Connection
       .makePacketStream(ch, timeOutMs, Chunk.empty[Byte])
       .foreach(p => packet_handler(p))
@@ -245,7 +239,7 @@ class Http2ClientConnection(
         Logger[IO].error("Client: inBoundWorker - " + e.toString()) >> dropStreams()
       })
 
-  def dropStreams() = for {
+  private[this] def dropStreams() = for {
     streams <- IO(this.streamTbl.values.toList)
     _ <- streams.traverse(_.d.complete(null))
     _ <- streams.traverse(_.inDataQ.offer(null))
@@ -255,7 +249,7 @@ class Http2ClientConnection(
     * @param packet
     * @return
     */
-  def packet_handler(packet: Chunk[Byte]) = {
+  private[this] def packet_handler(packet: Chunk[Byte]) = {
     val buffer = packet.toByteBuffer
     val packet0 = buffer.slice // preserve reference to whole packet
 
@@ -321,13 +315,13 @@ class Http2ClientConnection(
               remote_settings <- IO(Http2Settings.fromSettingsArray(buffer, len))
               _ <- settings1.set(remote_settings)
 
-              //transmit window: outbound for us, incoming for server
+              // transmit window: outbound for us, incoming for server
               _ <- upddateInitialWindowSizeAllStreams(
                 previous_remote_settings_iws,
                 remote_settings.INITIAL_WINDOW_SIZE
               )
               _ <- Logger[IO].debug(s"Client: Remote INITIAL_WINDOW_SIZE: ${remote_settings.INITIAL_WINDOW_SIZE}")
-              
+
             } yield ()).whenA(Flags.ACK(flags) == false)
 
         case FrameTypes.WINDOW_UPDATE => {
