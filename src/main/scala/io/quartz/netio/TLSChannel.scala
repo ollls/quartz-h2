@@ -27,6 +27,7 @@ import java.nio.channels.{
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import javax.net.ssl.SNIServerName
+import javax.net.ssl.SNIMatcher
 import java.security.cert.X509Certificate
 import java.io.FileInputStream
 import java.io.File
@@ -34,6 +35,7 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.KeyManagerFactory
 import scala.jdk.CollectionConverters.ListHasAsScala
 import java.nio.ByteBuffer
+import scala.collection.mutable.ListBuffer
 
 sealed case class TLSChannelError(msg: String) extends Exception(msg)
 
@@ -123,8 +125,15 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   // how many packets we can consume per read() call N of TLS_PACKET_SZ  -> N of APP_PACKET_SZ
   val MULTIPLER = 4
 
+  private[this] val sni_hosts = new ListBuffer[String]()
+
   // prealoc carryover buffer, position getting saved between calls
   private[this] val IN_J_BUFFER = java.nio.ByteBuffer.allocate(TLS_PACKET_SZ * MULTIPLER)
+
+  override def sniServerNames(): Option[Array[String]] = {
+    if( sni_hosts.size == 0 ) None
+    else Some(sni_hosts.toArray)
+  }  
 
   private[this] def doHandshakeClient() = {
     // val BUFF_SZ = ssl_engine.engine.getSession().getPacketBufferSize()
@@ -373,6 +382,8 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     result.handleErrorWith(_ => IO.unit)
   }
 
+  def secure() = true
+
   class SniName(sniServerName: String) extends SNIServerName(0, sniServerName.getBytes())
   def ssl_initClent_h2(sniServerName: String): IO[Unit] = {
     for {
@@ -427,9 +438,27 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   // ALPN (Application Layer Protocol Negotiation) for http2
   // returns leftover chunk which needs to be used before we read chanel again.
   // for 99% there will be no leftover but under extreme load or upon JVM init it happens
+
+  private class QuartzSNIMatcher extends SNIMatcher(0) {
+    // def matches​( serveName: SNIServerName ): Boolean = true
+    def matches(name: javax.net.ssl.SNIServerName): Boolean = {
+      sni_hosts.append(String(name.getEncoded()))
+      true
+    }
+  }
+
   def ssl_init_h2(): IO[Chunk[Byte]] = {
     for {
       _ <- f_SSL.setUseClientMode(false)
+      sslParameters <- IO(f_SSL.engine.getSSLParameters())
+      _ <- IO(
+        sslParameters.setSNIMatchers(
+          Array(new QuartzSNIMatcher()).foldLeft(new java.util.ArrayList[SNIMatcher]())((arr, x) => { arr.add(x); arr })
+        )
+      )
+
+      _ <- IO(f_SSL.engine.setSSLParameters(sslParameters))
+
       _ <- IO(f_SSL.engine.setHandshakeApplicationProtocolSelector((eng, list) => {
         if (list.asScala.find(_ == "h2").isDefined) "h2"
         else null
@@ -449,7 +478,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
     val res = for {
       out <- IO(ByteBuffer.allocate(if (in.limit() > TLS_PACKET_SZ) in.limit() * 3 else TLS_PACKET_SZ * 3))
-   
+
       loop = for {
         res <- f_SSL.wrap(in, out)
         stat <- IO(res.getStatus())

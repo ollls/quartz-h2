@@ -60,6 +60,13 @@ object / {
     }
 }
 
+
+object ! {
+   def unapply(req: Request): Option[(String, Request)] =
+     req.sniServerNames.map( array => ( array(0), req ) )
+}
+
+
 object -> {
   def unapply(req: Request): Option[(Method, Path)] =
     for {

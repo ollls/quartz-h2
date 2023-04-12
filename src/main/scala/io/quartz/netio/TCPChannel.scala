@@ -138,4 +138,6 @@ class TCPChannel( val ch: AsynchronousSocketChannel) extends IOChannel {
 
   def close(): IO[Unit] = IO(ch.close)
 
+   def secure() = false
+
 }

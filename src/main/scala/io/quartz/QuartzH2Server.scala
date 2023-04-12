@@ -107,7 +107,7 @@ object QuartzH2Server {
   *   the SSL context to use for secure connections, can be null for non-secure connections
   * @param incomingWinSize
   *   the initial window size for incoming flow control
-  * @param onConnect 
+  * @param onConnect
   *   callback function that is called when a connection is established, provides connectionId : Long as an argument
   * @param onDisconnect
   *   callback function that is called when a connection is terminated, provides connectionId : Long as an argument
@@ -276,7 +276,7 @@ class QuartzH2Server(
 
       emptyTH <- Deferred[IO, Headers] // no trailing headers for 1.1
       _ <- emptyTH.complete(Headers()) // complete with empty
-      http11request <- IO(Some(Request(id, 1, headers11, res, emptyTH)))
+      http11request <- IO(Some(Request(id, 1, headers11, res, ch.secure(), ch.sniServerNames(), emptyTH)))
       upd = headers11.get("upgrade").getOrElse("")
       _ <- Logger[IO].trace("doConnectUpgrade() - Upgrade = " + upd)
       clientPreface <-
@@ -308,7 +308,7 @@ class QuartzH2Server(
     e match {
       case BadProtocol(ch, e) =>
         Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
-        ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
+          ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
       case e: java.nio.channels.InterruptedByTimeoutException =>
         Logger[IO].info("Remote peer disconnected on timeout")
       case _ => Logger[IO].error("errorHandler: " + e.toString)
@@ -384,10 +384,21 @@ class QuartzH2Server(
     }
   }
 
+  private def printSniName(names: Option[Array[String]]) = {
+    names match {
+      case Some(value) => value(0)
+      case None        => "not provided"
+    }
+  }
+
+  private def tlsPrint(c: TLSChannel) = {
+    c.f_SSL.engine.getSession().getCipherSuite()
+  }
+
   def run0(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
-      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 (async - Java NIO)")
+      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 async mode (netio)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(
@@ -414,6 +425,11 @@ class QuartzH2Server(
         .flatMap(ch =>
           (IO(TLSChannel(sslCtx, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
+            .flatTap(c =>
+              Logger[IO].info(
+                s"${c._1.ctx.getProtocol()} ${tlsPrint(c._1)} ${c._1.f_SSL.engine.getApplicationProtocol()} tls-sni: ${printSniName(c._1.sniServerNames())}"
+              )
+            )
             .flatTap(_ => conId.update(_ + 1))
             .bracket(ch =>
               doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => { errorHandler(e) })
@@ -429,7 +445,7 @@ class QuartzH2Server(
   def run1(R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
-      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 ( sync - Java Socket )")
+      _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 sync mode (sockets)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}")
@@ -472,7 +488,7 @@ class QuartzH2Server(
   def run3(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
-      _ <- Logger[IO].info("HTTP/2 h2c service: QuartzH2 (async - Java NIO)")
+      _ <- Logger[IO].info("HTTP/2 h2c service: QuartzH2 async mode (netio)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2c idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(

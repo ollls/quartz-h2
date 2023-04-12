@@ -37,4 +37,5 @@ class SocketChannel(val socket: Socket) extends IOChannel {
     }
 
   }
+  def secure() = true //true only for this implementation
 }
