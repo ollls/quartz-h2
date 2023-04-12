@@ -6,7 +6,7 @@
 
 One more example/template: https://github.com/ollls/quartz-h2-gptapi
 
-# Asynchronous Java NIO **http/2 TLS** packet streaming server/client.
+# Asynchronous Java NIO **http/2 TLS** packet streaming server/client..
 
 TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons. 
 
