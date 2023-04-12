@@ -2,7 +2,7 @@ package io.quartz.http2
 
 import scala.collection.mutable.ArrayBuffer
 import cats.effect.{IO, Ref, Deferred}
-import cats.effect.std.Queue
+import cats.effect.std.{Queue,Semaphore}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
@@ -15,7 +15,8 @@ trait Http2ConnectionCommon(
     val globalBytesOfPendingInboundData: Ref[IO, Long],
     val globalInboundWindow: Ref[IO, Long],
     val globalTransmitWindow: Ref[IO, Long],
-    val outq: Queue[IO, ByteBuffer]
+    val outq: Queue[IO, ByteBuffer],
+    val hSem2: Semaphore[IO]
 ) {
   private case class txWindow_SplitDataFrame(buffer: ByteBuffer, dataLen: Int)
 

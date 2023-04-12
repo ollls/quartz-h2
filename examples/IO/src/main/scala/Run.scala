@@ -15,6 +15,8 @@ import io.quartz.http2.model.StatusCode
 import io.quartz.http2.routes.WebFilter
 import cats.syntax.all.catsSyntaxApplicativeByName
 import concurrent.duration.DurationInt
+import org.typelevel.log4cats.Logger
+import io.quartz.MyLogger._
 
 object param1 extends QueryParam("param1")
 object param2 extends QueryParam("param2")
@@ -69,7 +71,7 @@ object MyApp extends IOApp {
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
         reqPath <- IO(Path(HOME_DIR + req.uri.getPath()))
-        _ <- IO.println(reqPath.toString)
+        _ <- Logger[IO].info( s"Saving: ${reqPath.toString}")
         _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
         // _ <- req.stream.chunks.foreach( bb => IO.sleep( 1000.millis)).compile.drain
 
@@ -123,7 +125,7 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // incomingWinSize = 3145728)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) //, incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)

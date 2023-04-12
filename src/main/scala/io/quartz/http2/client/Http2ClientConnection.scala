@@ -62,6 +62,7 @@ object Http2ClientConnection {
       refDecoder <- Ref[IO].of[HeaderDecoder](null)
       refsId <- Ref[IO].of(1)
       hSem <- Semaphore[IO](1)
+      hSem2 <- Semaphore[IO](1)
       awaitSettings <- Deferred[IO, Boolean]
       settings0 <- Ref[IO].of(
         Http2Settings()
@@ -82,6 +83,7 @@ object Http2ClientConnection {
         outq,
         f0,
         hSem,
+        hSem2,
         awaitSettings,
         settings0,
         globalBytesOfPendingInboundData,
@@ -125,6 +127,7 @@ class Http2ClientConnection(
     outq: Queue[IO, ByteBuffer],
     outBoundFiber: Fiber[IO, Throwable, Nothing],
     hSem: Semaphore[IO],
+    hSem2: Semaphore[IO],
     awaitSettings: Deferred[IO, Boolean],
     settings1: Ref[IO, Http2Settings],
     globalBytesOfPendingInboundData: Ref[IO, Long],
@@ -136,7 +139,8 @@ class Http2ClientConnection(
       globalBytesOfPendingInboundData,
       inboundWindow,
       transmitWindow,
-      outq
+      outq,
+      hSem2
     ) {
 
   class Http2ClientStream(
@@ -489,7 +493,7 @@ class Http2ClientConnection(
         .void
       // END OF DATA /////
 
-      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId ${GET.name} $path")
+      _ <- Logger[IO].trace(s"Client: Stream Id: $streamId ${method.name} $path")
       _ <- Logger[IO].trace(s"Client: Stream Id: $streamId request headers: ${h1.printHeaders(" | ")})")
 
       // wait for response
@@ -514,7 +518,7 @@ class Http2ClientConnection(
 
       code <- IO(h.get(":status").get)
       _ <- Logger[IO].debug(
-        s"Client: Stream Id: $streamId response $code  ${GET.name} $path"
+        s"Client: Stream Id: $streamId response $code  ${method.name} $path"
       )
 
       _ <- Logger[IO].trace(s"Client: Stream Id: $streamId response headers: ${h.printHeaders(" | ")})")

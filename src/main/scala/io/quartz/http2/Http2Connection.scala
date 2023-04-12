@@ -52,6 +52,7 @@ object Http2Connection {
       http11Req_ref <- Ref[IO].of[Option[Request]](http11request)
 
       hSem <- Semaphore[IO](1)
+      hSem2 <- Semaphore[IO](1)
 
       globalTransmitWindow <- Ref[IO].of[Long](65535) // (default_server_settings.INITIAL_WINDOW_SIZE)
       globalInboundWindow <- Ref[IO].of(65535L) // (default_server_settings.INITIAL_WINDOW_SIZE)
@@ -76,6 +77,7 @@ object Http2Connection {
           globalInboundWindow,
           shutdownPromise,
           hSem,
+          hSem2,
           maxStreams,
           keepAliveMs,
           in_winSize
@@ -116,7 +118,9 @@ object Http2Connection {
       c: Http2ConnectionCommon,
       q: Queue[IO, ByteBuffer]
   ): IO[ByteBuffer] = for {
+    // _ <- IO.println( "Q<<<<<<<<<")
     bb <- q.take
+    // _ <- IO.println( "Q>>>>>>>>")
     _ <- IO.raiseError(java.nio.channels.ClosedChannelException()).whenA(bb == null)
     tp <- IO(parseFrame(bb))
     streamId = tp._4
@@ -125,10 +129,14 @@ object Http2Connection {
     _ <- IO.raiseError(ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")).whenA(o_stream.isEmpty)
     stream: Http2StreamCommon <- IO(o_stream.get)
     //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    _ <- c.hSem2.acquire.bracket { _ =>
+      for {
+        _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow)
+        _ <- c.globalBytesOfPendingInboundData.update(_ - len)
+        _ <- c.globalInboundWindow.update(_ - len)
+      } yield ()
+    }(_ => c.hSem2.release)
 
-    _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow)
-    _ <- c.globalBytesOfPendingInboundData.update(_ - len)
-    _ <- c.globalInboundWindow.update(_ - len)
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////
     _ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow)
     _ <- stream.bytesOfPendingInboundData.update(_ - len)
@@ -234,6 +242,7 @@ class Http2Connection(
     globalInboundWindow: Ref[IO, Long],
     shutdownD: Deferred[IO, Boolean],
     hSem: Semaphore[IO],
+    hSem2: Semaphore[IO],
     MAX_CONCURRENT_STREAMS: Int,
     HTTP2_KEEP_ALIVE_MS: Int,
     INITIAL_WINDOW_SIZE: Int
@@ -242,7 +251,8 @@ class Http2Connection(
       globalBytesOfPendingInboundData,
       globalInboundWindow,
       globalTransmitWindow,
-      outq
+      outq,
+      hSem2
     ) {
 
   val settings: Http2Settings = new Http2Settings()
@@ -774,7 +784,8 @@ class Http2Connection(
   private[this] def closeStream(streamId: Int): IO[Unit] = {
     for {
       _ <- IO(concurrentStreams.decrementAndGet())
-      _ <- IO(streamTbl.remove(streamId)) // - Http2Connection.STREAM_PURGE_DELAY))
+
+      _ <- IO(streamTbl.remove(streamId))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
