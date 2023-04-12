@@ -101,14 +101,16 @@ object Http2Connection {
       c: Http2ConnectionCommon,
       streamId: Int,
       received: Ref[IO, Long],
-      window: Ref[IO, Long]
+      window: Ref[IO, Long],
+      len: Int
   ) =
     for {
-      bytes_received <- received.get
-      bytes_available <- window.get
+      bytes_received <- received.getAndUpdate(_ - len)
+      bytes_available <- window.getAndUpdate(_ - len)
       send_update <- IO(
         bytes_received < c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3
       )
+      // _ <- IO.println(s"$send_update $streamId received = $bytes_received avail on win = $bytes_available ")
       upd = c.INITIAL_WINDOW_SIZE - bytes_available.toInt
       _ <- (c.sendFrame(Frames.mkWindowUpdateFrame(streamId, upd)) *> window
         .update(_ + upd) *> Logger[IO].debug(s"Send UPDATE_WINDOW $upd streamId= $streamId")).whenA(send_update)
@@ -118,9 +120,8 @@ object Http2Connection {
       c: Http2ConnectionCommon,
       q: Queue[IO, ByteBuffer]
   ): IO[ByteBuffer] = for {
-    // _ <- IO.println( "Q<<<<<<<<<")
+
     bb <- q.take
-    // _ <- IO.println( "Q>>>>>>>>")
     _ <- IO.raiseError(java.nio.channels.ClosedChannelException()).whenA(bb == null)
     tp <- IO(parseFrame(bb))
     streamId = tp._4
@@ -128,19 +129,9 @@ object Http2Connection {
     o_stream <- IO(c.getStream((streamId)))
     _ <- IO.raiseError(ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")).whenA(o_stream.isEmpty)
     stream: Http2StreamCommon <- IO(o_stream.get)
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////
-    _ <- c.hSem2.acquire.bracket { _ =>
-      for {
-        _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow)
-        _ <- c.globalBytesOfPendingInboundData.update(_ - len)
-        _ <- c.globalInboundWindow.update(_ - len)
-      } yield ()
-    }(_ => c.hSem2.release)
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-    _ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow)
-    _ <- stream.bytesOfPendingInboundData.update(_ - len)
-    _ <- stream.inboundWindow.update(_ - len)
+    _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow, len)
+    _ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow, len)
 
   } yield (bb)
 
@@ -775,17 +766,14 @@ class Http2Connection(
       }
       _ <- closeStream(streamId)
     } yield ()
-
     T
-
-    // IO(T).bracket( c => c )(_ => closeStream(streamId))
   }
 
   private[this] def closeStream(streamId: Int): IO[Unit] = {
     for {
       _ <- IO(concurrentStreams.decrementAndGet())
 
-      _ <- IO(streamTbl.remove(streamId))
+      _ <- IO(streamTbl.remove(streamId - 0 * MAX_CONCURRENT_STREAMS))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
