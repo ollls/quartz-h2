@@ -16,7 +16,7 @@ trait Http2ConnectionCommon(
     val globalInboundWindow: Ref[IO, Long],
     val globalTransmitWindow: Ref[IO, Long],
     val outq: Queue[IO, ByteBuffer],
-    val hSem2: Semaphore[IO]
+    val hSem2: Semaphore[IO] /* not used */
 ) {
   private case class txWindow_SplitDataFrame(buffer: ByteBuffer, dataLen: Int)
 

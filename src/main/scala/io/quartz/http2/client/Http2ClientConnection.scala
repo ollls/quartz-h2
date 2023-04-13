@@ -5,7 +5,7 @@ import scala.jdk.CollectionConverters._
 import java.net.URI
 import cats.implicits._
 import fs2.{Stream, Pull, Chunk}
-import cats.effect.{IO,Fiber, Ref}
+import cats.effect.{IO, Fiber, Ref}
 import cats.effect.std.Queue
 import java.nio.ByteBuffer
 import org.typelevel.log4cats.Logger
@@ -19,7 +19,6 @@ import io.quartz.netio.IOChannel
 import io.quartz.http2.model.Method._
 import io.quartz.http2.HeaderEncoder
 import concurrent.duration.DurationInt
-
 
 case class ClientResponse(
     status: StatusCode,
@@ -244,6 +243,7 @@ class Http2ClientConnection(
       })
 
   private[this] def dropStreams() = for {
+    _ <- awaitSettings.complete(true)
     streams <- IO(this.streamTbl.values.toList)
     _ <- streams.traverse(_.d.complete(null))
     _ <- streams.traverse(_.inDataQ.offer(null))
