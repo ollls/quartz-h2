@@ -6,6 +6,8 @@ import fs2.{Stream, Chunk}
 import fs2.io.file.{Files, Path}
 import cats.Parallel
 
+import io.quartz.MyLogger._
+import org.typelevel.log4cats.Logger
 import ch.qos.logback.classic.Level
 import io.quartz.QuartzH2Server
 import io.quartz.QuartzH2Client
@@ -53,8 +55,9 @@ object SimpleSuite extends IOTestSuite {
 
       c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
 
-      program = c.doGet("/" + BIG_FILE).flatMap(_.stream.compile.drain)
+      program = c.doGet("/" + BIG_FILE).flatMap(_.stream.compile.count)
       list <- Parallel.parReplicateA(NUMBER_OF_STREAMS, program)
+      _ <- list.traverse(b => Logger[IO].info(s"Bytes received $b"))
 
       c <- c.close()
       _ <- server.shutdown
