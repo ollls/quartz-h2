@@ -27,6 +27,7 @@ import io.quartz.http2.Http2Settings
 
 import cats.implicits._
 import org.typelevel.log4cats.Logger
+import ch.qos.logback.classic.Level
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
@@ -65,6 +66,12 @@ case class HeaderSizeLimitExceeded(msg: String) extends Exception(msg)
 case class BadProtocol(ch: IOChannel, msg: String) extends Exception(msg)
 
 object QuartzH2Server {
+
+  def setLoggingLevel(level: Level) = {
+    val root = org.slf4j.LoggerFactory.getLogger("ROOT").asInstanceOf[ch.qos.logback.classic.Logger]
+    root.setLevel(level)
+  }
+
   def buildSSLContext(
       protocol: String,
       JKSkeystore: String,
@@ -126,9 +133,17 @@ class QuartzH2Server(
   val HTTP1_KEEP_ALIVE_MS = 20000
 
   val default_server_settings = new Http2Settings()
+  var shutdownFlag = false
 
+  // only HTTP11
   val header_pair = raw"(.{2,100}):\s+(.+)".r
   val http_line = raw"([A-Z]{3,8})\s+(.+)\s+(HTTP/.+)".r
+
+  def shutdown = (for {
+    _ <- IO { shutdownFlag = true }
+    c <- TCPChannel.connect(HOST, PORT)
+    _ <- c.close()
+  } yield ()).handleError(_ => ())
 
   private def parseHeaderLine(line: String, hdrs: Headers): Headers =
     line match {
@@ -304,16 +319,18 @@ class QuartzH2Server(
   }
 
   ///////////////////////////////////
-  def errorHandler(e: Throwable) = {
-    e match {
-      case BadProtocol(ch, e) =>
-        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
-          ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
-      case e: java.nio.channels.InterruptedByTimeoutException =>
-        Logger[IO].info("Remote peer disconnected on timeout")
-      case _ => Logger[IO].error("errorHandler: " + e.toString)
-      /*>> IO(e.printStackTrace)*/
-    }
+  def errorHandler(e: Throwable): IO[Unit] = {
+    if (shutdownFlag == false) {
+      e match {
+        case BadProtocol(ch, e) =>
+          Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
+            ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes)).void
+        case e: java.nio.channels.InterruptedByTimeoutException =>
+          Logger[IO].info("Remote peer disconnected on timeout")
+        case _ => Logger[IO].error("errorHandler: " + e.toString)
+        /*>> IO(e.printStackTrace)*/
+      }
+    } else IO.unit
   }
 
   def hostName(address: SocketAddress) = {
@@ -359,6 +376,7 @@ class QuartzH2Server(
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
+    // QuartzH2Server.setLoggingLevel( Level.OFF)
     if (sync == false) {
       val fjj = new ForkJoinWorkerThreadFactory {
         val num = new AtomicInteger();
@@ -370,6 +388,7 @@ class QuartzH2Server(
         }
       }
       val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
+      // val e = Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
 
       if (sslCtx != null)
@@ -427,7 +446,8 @@ class QuartzH2Server(
             .flatMap(c => c.ssl_init_h2().map((c, _)))
             .flatTap(c =>
               Logger[IO].info(
-                s"${c._1.ctx.getProtocol()} ${tlsPrint(c._1)} ${c._1.f_SSL.engine.getApplicationProtocol()} tls-sni: ${printSniName(c._1.sniServerNames())}"
+                s"${c._1.ctx.getProtocol()} ${tlsPrint(c._1)} ${c._1.f_SSL.engine
+                    .getApplicationProtocol()} tls-sni: ${printSniName(c._1.sniServerNames())}"
               )
             )
             .flatTap(_ => conId.update(_ + 1))
@@ -437,7 +457,8 @@ class QuartzH2Server(
             .handleErrorWith(e => { errorHandler(e) >> ch.close() })
             .start)
         )
-        .foreverM
+        .iterateUntil(_ => shutdownFlag)
+      _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
   }
@@ -480,7 +501,8 @@ class QuartzH2Server(
             )(ch => ch.close())
             .start)
         )
-        .foreverM
+        .iterateUntil(_ => shutdownFlag)
+      _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
   }
@@ -522,7 +544,8 @@ class QuartzH2Server(
             )(_.close())
             .start
         )
-        .foreverM
+        .iterateUntil(_ => shutdownFlag)
+      _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
   }

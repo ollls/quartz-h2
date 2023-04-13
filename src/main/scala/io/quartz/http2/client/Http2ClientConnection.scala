@@ -5,7 +5,7 @@ import scala.jdk.CollectionConverters._
 import java.net.URI
 import cats.implicits._
 import fs2.{Stream, Pull, Chunk}
-import cats.effect.{IO,Fiber, Ref}
+import cats.effect.{IO, Fiber, Ref}
 import cats.effect.std.Queue
 import java.nio.ByteBuffer
 import org.typelevel.log4cats.Logger
@@ -19,7 +19,6 @@ import io.quartz.netio.IOChannel
 import io.quartz.http2.model.Method._
 import io.quartz.http2.HeaderEncoder
 import concurrent.duration.DurationInt
-
 
 case class ClientResponse(
     status: StatusCode,
@@ -44,7 +43,7 @@ object Http2ClientConnection {
   private def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
     bb <- outq.take
     _ <- ch.write(bb)
-  } yield ()).handleErrorWith(e => Logger[IO].error("Client: outBoundWorker - " + e.toString()))
+  } yield ()).handleErrorWith(e => Logger[IO].debug("Client: outBoundWorker - " + e.toString()))
 
   /** Reads data from the given IOChannel and processes it with the packet_handler. This function reads data from the
     * IOChannel in chunks representing Http2 packets, converts them to packets using the makePacketStream function, and
@@ -240,10 +239,11 @@ class Http2ClientConnection(
       .compile
       .drain
       .handleErrorWith(e => {
-        Logger[IO].error("Client: inBoundWorker - " + e.toString()) >> dropStreams()
+        Logger[IO].debug("Client: inBoundWorker - " + e.toString()) >> dropStreams()
       })
 
   private[this] def dropStreams() = for {
+    _ <- awaitSettings.complete(true)
     streams <- IO(this.streamTbl.values.toList)
     _ <- streams.traverse(_.d.complete(null))
     _ <- streams.traverse(_.inDataQ.offer(null))
