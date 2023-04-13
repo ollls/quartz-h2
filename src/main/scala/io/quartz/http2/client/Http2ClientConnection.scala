@@ -43,7 +43,7 @@ object Http2ClientConnection {
   private def outBoundWorker(ch: IOChannel, outq: Queue[IO, ByteBuffer]) = (for {
     bb <- outq.take
     _ <- ch.write(bb)
-  } yield ()).handleErrorWith(e => Logger[IO].error("Client: outBoundWorker - " + e.toString()))
+  } yield ()).handleErrorWith(e => Logger[IO].debug("Client: outBoundWorker - " + e.toString()))
 
   /** Reads data from the given IOChannel and processes it with the packet_handler. This function reads data from the
     * IOChannel in chunks representing Http2 packets, converts them to packets using the makePacketStream function, and
@@ -239,7 +239,7 @@ class Http2ClientConnection(
       .compile
       .drain
       .handleErrorWith(e => {
-        Logger[IO].error("Client: inBoundWorker - " + e.toString()) >> dropStreams()
+        Logger[IO].debug("Client: inBoundWorker - " + e.toString()) >> dropStreams()
       })
 
   private[this] def dropStreams() = for {

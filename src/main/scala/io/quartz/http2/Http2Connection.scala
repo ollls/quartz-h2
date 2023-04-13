@@ -279,7 +279,7 @@ class Http2Connection(
     globalBytesOfPendingInboundData.update(_ + increment)
 
   def shutdown: IO[Unit] =
-    outq.offer(null) >> shutdownD.get.void >> Logger[IO].error("Http2Connection.shutdown")
+    outq.offer(null) >> shutdownD.get.void >> Logger[IO].debug("Http2Connection.shutdown")
 
   /*
     When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
@@ -367,9 +367,9 @@ class Http2Connection(
   private[this] def handleStreamErrors(streamId: Int, e: Throwable): IO[Unit] = {
     e match {
       case e @ ErrorGen(streamId, code, name) =>
-        Logger[IO].error("handleStreamErrors: " + e.toString) >>
+        Logger[IO].error( s"handleStreamErrors: streamID = $streamId ${e.name}") >>
           ch.write(Frames.mkGoAwayFrame(streamId, code, name.getBytes)).void >> this.ch.close()
-      case _ => Logger[IO].error("handleStreamErrors:: " + e.toString) >> IO.raiseError(e)
+      case _ => Logger[IO].error( s"handleStreamErrors:: " + e.toString) >> IO.raiseError(e)
     }
   }
 
@@ -795,8 +795,12 @@ class Http2Connection(
       .compile
       .drain
   } yield ()).handleErrorWith[Unit] {
+    case e @ TLSChannelError(_) =>
+      Logger[IO].debug(s"connid = ${this.id} ${e.toString} ${e.getMessage()}") >>
+        Logger[IO].error(s"Forced disconnect connId=${this.id} with tls error")
+    case e: java.nio.channels.ClosedChannelException => Logger[IO].info(s"Connection connId=${this.id} closed by remote")
     case e @ ErrorGen(streamId, code, name) =>
-      Logger[IO].error(s"Http2Connnection.processIncoming() ${e.code} ${name}") >>
+      Logger[IO].error(s"Forced disconnect connId=${this.id} code=${e.code} ${name}") >>
         sendFrame(Frames.mkGoAwayFrame(streamId, code, name.getBytes))
     case e @ _ => {
       Logger[IO].error(e.toString()) // >> */IO.raiseError(e)

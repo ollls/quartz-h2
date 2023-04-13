@@ -6,6 +6,7 @@ import fs2.{Stream, Chunk}
 import fs2.io.file.{Files, Path}
 import cats.Parallel
 
+import ch.qos.logback.classic.Level
 import io.quartz.QuartzH2Server
 import io.quartz.QuartzH2Client
 import io.quartz.http2.routes.HttpRouteIO
@@ -42,7 +43,7 @@ object SimpleSuite extends IOTestSuite {
   test("Parallel streams with GET") {
     val NUMBER_OF_STREAMS = 30
     for {
-
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.INFO))
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
       server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
 

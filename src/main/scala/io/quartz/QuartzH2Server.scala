@@ -139,11 +139,11 @@ class QuartzH2Server(
   val header_pair = raw"(.{2,100}):\s+(.+)".r
   val http_line = raw"([A-Z]{3,8})\s+(.+)\s+(HTTP/.+)".r
 
-  def shutdown = for {
+  def shutdown = (for {
     _ <- IO { shutdownFlag = true }
     c <- TCPChannel.connect(HOST, PORT)
     _ <- c.close()
-  } yield ()
+  } yield ()).handleError(_ => ())
 
   private def parseHeaderLine(line: String, hdrs: Headers): Headers =
     line match {
@@ -319,16 +319,18 @@ class QuartzH2Server(
   }
 
   ///////////////////////////////////
-  def errorHandler(e: Throwable) = {
-    e match {
-      case BadProtocol(ch, e) =>
-        Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
-          ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes))
-      case e: java.nio.channels.InterruptedByTimeoutException =>
-        Logger[IO].info("Remote peer disconnected on timeout")
-      case _ => Logger[IO].error("errorHandler: " + e.toString)
-      /*>> IO(e.printStackTrace)*/
-    }
+  def errorHandler(e: Throwable): IO[Unit] = {
+    if (shutdownFlag == false) {
+      e match {
+        case BadProtocol(ch, e) =>
+          Logger[IO].error("Cannot see HTTP2 Preface, bad protocol (1)") >>
+            ch.write(Frames.mkGoAwayFrame(0, Error.PROTOCOL_ERROR, "".getBytes)).void
+        case e: java.nio.channels.InterruptedByTimeoutException =>
+          Logger[IO].info("Remote peer disconnected on timeout")
+        case _ => Logger[IO].error("errorHandler: " + e.toString)
+        /*>> IO(e.printStackTrace)*/
+      }
+    } else IO.unit
   }
 
   def hostName(address: SocketAddress) = {
@@ -374,7 +376,7 @@ class QuartzH2Server(
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
-    //QuartzH2Server.setLoggingLevel( Level.OFF)
+    // QuartzH2Server.setLoggingLevel( Level.OFF)
     if (sync == false) {
       val fjj = new ForkJoinWorkerThreadFactory {
         val num = new AtomicInteger();
@@ -386,7 +388,7 @@ class QuartzH2Server(
         }
       }
       val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
-      //val e = Executors.newFixedThreadPool(cores * 2);
+      // val e = Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
 
       if (sslCtx != null)
