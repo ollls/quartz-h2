@@ -1,10 +1,12 @@
-package example
+import scala.concurrent.duration._
+import cats.implicits._
+import cats.effect.IO
+import cats.effect.testing.minitest.IOTestSuite
 
-import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers
+object SimpleSuite extends IOTestSuite {
+  override val timeout = 1.second // Default timeout is 10 seconds
 
-class HelloSpec extends AnyFlatSpec with Matchers {
-  //"The Hello object" should "say hello" in {
-  //  Hello.greeting shouldEqual "hello"
- // }
+  test("do the thing") {
+    IO(assert(true))
+  }
 }
