@@ -200,7 +200,7 @@ trait Http2StreamCommon(
     val bytesOfPendingInboundData: Ref[IO, Long],
     val inboundWindow: Ref[IO, Long],
     val transmitWindow: Ref[IO, Long],
-    val outXFlowSync: Queue[IO, Unit]
+    val outXFlowSync: Queue[IO, Boolean]
 )
 class Http2Stream(
     active: Ref[IO, Boolean],
@@ -208,7 +208,7 @@ class Http2Stream(
     val header: ArrayBuffer[ByteBuffer],
     val trailing_header: ArrayBuffer[ByteBuffer],
     val inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
-    outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
+    outXFlowSync: Queue[IO, Boolean], // flow control sync queue for data frames
     transmitWindow: Ref[IO, Long],
     syncUpdateWindowQ: Queue[IO, Unit],
     bytesOfPendingInboundData: Ref[IO, Long], // metric
@@ -246,7 +246,6 @@ class Http2Connection(
       hSem2
     ) {
 
-  var STREAMTBL_PURGE_DELAY = 1024
   // best pefromace 0, but is that case
   // a stream closes immediately when data packet with end stream flag comes.
   // if client send something after last data packet, it will be lost with unknown streamId exception.
@@ -289,7 +288,7 @@ class Http2Connection(
   private[this] def updateInitiallWindowSize(stream: Http2Stream, currentWinSize: Int, newWinSize: Int) = {
     Logger[IO].info(s"Http2Connection.upddateInitialWindowSize( $currentWinSize, $newWinSize)") >>
       stream.transmitWindow.update(txBytesLeft => newWinSize - (currentWinSize - txBytesLeft)) >> stream.outXFlowSync
-        .offer(())
+        .offer(true)
   }
 
   private[this] def upddateInitialWindowSizeAllStreams(currentSize: Int, newSize: Int) = {
@@ -311,6 +310,27 @@ class Http2Connection(
         )
         .whenA(rs >= Integer.MAX_VALUE)
     } yield ()
+  }
+
+  private[this] def updateWindowStream(streamId: Int, inc: Int) = {
+    streamTbl.get(streamId) match {
+      case None => Logger[IO].error(s"Update window, streamId=$streamId invalid or closed already")
+      case Some(stream) =>
+        for {
+          _ <- stream.transmitWindow.update(_ + inc)
+          rs <- stream.transmitWindow.get
+          _ <- IO
+            .raiseError(
+              ErrorRst(
+                streamId,
+                Error.FLOW_CONTROL_ERROR,
+                "Sends multiple WINDOW_UPDATE frames increasing the flow control window to above 2^31-1"
+              )
+            )
+            .whenA(rs >= Integer.MAX_VALUE)
+          _ <- stream.outXFlowSync.offer(true)
+        } yield ()
+    }
   }
 
   private[this] def updateWindow(streamId: Int, inc: Int): IO[Unit] = {
@@ -338,38 +358,20 @@ class Http2Connection(
                                         )
                                       )
                                       .whenA(rs >= Integer.MAX_VALUE)
-                                    _ <- stream.outXFlowSync.offer(())
+                                    _ <- stream.outXFlowSync.offer(true)
                                   } yield ()
                                 )
                                 .void
-                          else
-                            updateStreamWith(
-                              1,
-                              streamId,
-                              stream =>
-                                for {
-                                  _ <- stream.transmitWindow.update(_ + inc)
-                                  rs <- stream.transmitWindow.get
-                                  _ <- IO
-                                    .raiseError(
-                                      ErrorRst(
-                                        streamId,
-                                        Error.FLOW_CONTROL_ERROR,
-                                        ""
-                                      )
-                                    )
-                                    .whenA(rs >= Integer.MAX_VALUE)
-                                  _ <- stream.outXFlowSync.offer(())
-                                } yield ()
-                            ))
+                          else updateWindowStream(streamId, inc))
+
   }
 
   private[this] def handleStreamErrors(streamId: Int, e: Throwable): IO[Unit] = {
     e match {
       case e @ ErrorGen(streamId, code, name) =>
-        Logger[IO].error( s"handleStreamErrors: streamID = $streamId ${e.name}") >>
+        Logger[IO].error(s"handleStreamErrors: streamID = $streamId ${e.name}") >>
           ch.write(Frames.mkGoAwayFrame(streamId, code, name.getBytes)).void >> this.ch.close()
-      case _ => Logger[IO].error( s"handleStreamErrors:: " + e.toString) >> IO.raiseError(e)
+      case _ => Logger[IO].error(s"handleStreamErrors:: " + e.toString) >> IO.raiseError(e)
     }
   }
 
@@ -400,7 +402,7 @@ class Http2Connection(
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
       dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
-      xFlowSync <- Queue.unbounded[IO, Unit]
+      xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
 
@@ -460,7 +462,7 @@ class Http2Connection(
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
       dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
-      xFlowSync <- Queue.unbounded[IO, Unit]
+      xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
 
@@ -708,7 +710,6 @@ class Http2Connection(
           Logger[IO].error(e.toString) >>
             IO(Some(Response.Error(StatusCode.InternalServerError)))
       }
-
       _ <- response_o match {
         case Some(response) =>
           for {
@@ -781,7 +782,7 @@ class Http2Connection(
     for {
       _ <- IO(concurrentStreams.decrementAndGet())
 
-      _ <- IO(streamTbl.remove(streamId - STREAMTBL_PURGE_DELAY))
+      _ <- IO(streamTbl.remove(streamId))
       _ <- Logger[IO].debug(s"Close stream: $streamId")
     } yield ()
 
@@ -798,7 +799,8 @@ class Http2Connection(
     case e @ TLSChannelError(_) =>
       Logger[IO].debug(s"connid = ${this.id} ${e.toString} ${e.getMessage()}") >>
         Logger[IO].error(s"Forced disconnect connId=${this.id} with tls error")
-    case e: java.nio.channels.ClosedChannelException => Logger[IO].info(s"Connection connId=${this.id} closed by remote")
+    case e: java.nio.channels.ClosedChannelException =>
+      Logger[IO].info(s"Connection connId=${this.id} closed by remote")
     case e @ ErrorGen(streamId, code, name) =>
       Logger[IO].error(s"Forced disconnect connId=${this.id} code=${e.code} ${name}") >>
         sendFrame(Frames.mkGoAwayFrame(streamId, code, name.getBytes))
@@ -890,8 +892,8 @@ class Http2Connection(
                         "stream's Id number is less than previously used Id number"
                       )
                     )
-                    .whenA(lastStreamId != 0 && lastStreamId > streamId)
-                  _ <- IO { lastStreamId = streamId }
+                    .whenA( streamId <= lastStreamId)
+                  _ <- IO { lastStreamId = streamId }.whenA( streamId != 0 )
 
                   _ <- priority match {
                     case Some(t3) =>
@@ -991,13 +993,26 @@ class Http2Connection(
 
             case FrameTypes.WINDOW_UPDATE => {
               val increment = buffer.getInt() & Masks.INT31
-              Logger[IO].debug(s"WINDOW_UPDATE $increment $streamId") >> this
-                .updateWindow(streamId, increment)
-                .handleErrorWith[Unit] {
-                  case e @ ErrorRst(streamId, code, name) =>
-                    Logger[IO].error("Reset frane") >> sendFrame(Frames.mkRstStreamFrame(streamId, code))
-                  case e @ _ => IO.raiseError(e)
-                }
+              for {
+                _ <- IO
+                  .raiseError(
+                    ErrorGen(
+                      streamId,
+                      Error.PROTOCOL_ERROR,
+                      "stream's Id number is less than previously used Id number"
+                    )
+                  )
+                  .whenA( streamId > lastStreamId  )
+                _ <- Logger[IO].debug(s"WINDOW_UPDATE $increment $streamId") >> this
+                  .updateWindow(streamId, increment)
+                  .handleErrorWith[Unit] {
+                    case e @ ErrorRst(streamId, code, name) =>
+                      Logger[IO].error(s"Send Stream Reset: streamId=$streamId $name") >> sendFrame(
+                        Frames.mkRstStreamFrame(streamId, code)
+                      )
+                    case e @ _ => IO.raiseError(e)
+                  }
+              } yield ()
             }
 
             case FrameTypes.PING =>

@@ -458,6 +458,7 @@ class QuartzH2Server(
             .start)
         )
         .iterateUntil(_ => shutdownFlag)
+      _ <- IO(server_ch.close())
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
@@ -502,6 +503,7 @@ class QuartzH2Server(
             .start)
         )
         .iterateUntil(_ => shutdownFlag)
+      _ <- IO(server_ch.close())
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
@@ -545,6 +547,7 @@ class QuartzH2Server(
             .start
         )
         .iterateUntil(_ => shutdownFlag)
+      _<-  IO(server_ch.close())
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
