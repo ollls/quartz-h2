@@ -200,7 +200,7 @@ trait Http2StreamCommon(
     val bytesOfPendingInboundData: Ref[IO, Long],
     val inboundWindow: Ref[IO, Long],
     val transmitWindow: Ref[IO, Long],
-    val outXFlowSync: Queue[IO, Unit]
+    val outXFlowSync: Queue[IO, Boolean]
 )
 class Http2Stream(
     active: Ref[IO, Boolean],
@@ -208,7 +208,7 @@ class Http2Stream(
     val header: ArrayBuffer[ByteBuffer],
     val trailing_header: ArrayBuffer[ByteBuffer],
     val inDataQ: Queue[IO, ByteBuffer], // accumulate data packets in stream function
-    outXFlowSync: Queue[IO, Unit], // flow control sync queue for data frames
+    outXFlowSync: Queue[IO, Boolean], // flow control sync queue for data frames
     transmitWindow: Ref[IO, Long],
     syncUpdateWindowQ: Queue[IO, Unit],
     bytesOfPendingInboundData: Ref[IO, Long], // metric
@@ -288,7 +288,7 @@ class Http2Connection(
   private[this] def updateInitiallWindowSize(stream: Http2Stream, currentWinSize: Int, newWinSize: Int) = {
     Logger[IO].info(s"Http2Connection.upddateInitialWindowSize( $currentWinSize, $newWinSize)") >>
       stream.transmitWindow.update(txBytesLeft => newWinSize - (currentWinSize - txBytesLeft)) >> stream.outXFlowSync
-        .offer(())
+        .offer(true)
   }
 
   private[this] def upddateInitialWindowSizeAllStreams(currentSize: Int, newSize: Int) = {
@@ -328,7 +328,7 @@ class Http2Connection(
               )
             )
             .whenA(rs >= Integer.MAX_VALUE)
-          _ <- stream.outXFlowSync.offer(())
+          _ <- stream.outXFlowSync.offer(true)
         } yield ()
     }
   }
@@ -358,7 +358,7 @@ class Http2Connection(
                                         )
                                       )
                                       .whenA(rs >= Integer.MAX_VALUE)
-                                    _ <- stream.outXFlowSync.offer(())
+                                    _ <- stream.outXFlowSync.offer(true)
                                   } yield ()
                                 )
                                 .void
@@ -402,7 +402,7 @@ class Http2Connection(
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
       dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
-      xFlowSync <- Queue.unbounded[IO, Unit]
+      xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
 
@@ -462,7 +462,7 @@ class Http2Connection(
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
       dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
-      xFlowSync <- Queue.unbounded[IO, Unit]
+      xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
 

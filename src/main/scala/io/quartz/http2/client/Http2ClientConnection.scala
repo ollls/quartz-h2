@@ -150,7 +150,7 @@ class Http2ClientConnection(
       inboundWindow: Ref[IO, Long],
       transmitWindow: Ref[IO, Long],
       bytesOfPendingInboundData: Ref[IO, Long],
-      outXFlowSync: Queue[IO, Unit]
+      outXFlowSync: Queue[IO, Boolean]
   ) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow, transmitWindow, outXFlowSync)
 
   val streamTbl = java.util.concurrent.ConcurrentHashMap[Int, Http2ClientStream](100).asScala
@@ -166,7 +166,7 @@ class Http2ClientConnection(
     transmitWindow <- Ref[IO].of[Long](
       65535L
     ) // set in upddateInitialWindowSizeAllStreams
-    xFlowSync <- Queue.unbounded[IO, Unit]
+    xFlowSync <- Queue.unbounded[IO, Boolean]
   } yield (Http2ClientStream(
     streamId,
     d,
@@ -247,6 +247,8 @@ class Http2ClientConnection(
     streams <- IO(this.streamTbl.values.toList)
     _ <- streams.traverse(_.d.complete(null))
     _ <- streams.traverse(_.inDataQ.offer(null))
+    _ <- streams.traverse(s0 => s0.outXFlowSync.offer(false) *> s0.outXFlowSync.offer(false))
+
   } yield ()
 
   /** packet_handler
@@ -475,10 +477,10 @@ class Http2ClientConnection(
               .whenA(chunk0.nonEmpty)
             _ <- pref.set(chunk)
           } yield ()
-
         }
         .compile
         .drain
+        .handleError { case _: java.lang.InterruptedException => IO.unit }
         .whenA(endStreamInHeaders == false)
 
       lastChunk <- pref.get
@@ -489,6 +491,7 @@ class Http2ClientConnection(
         lastChunk.toByteBuffer
       )
         .traverse(b => sendDataFrame(streamId, b))
+        .handleError { case _: java.lang.InterruptedException => IO.unit }
         .whenA(endStreamInHeaders == false)
         .void
       // END OF DATA /////
@@ -566,7 +569,7 @@ class Http2ClientConnection(
       s"Client: Http2Connection.upddateInitialWindowSize( $currentWinSize, $newWinSize)"
     ) >>
       stream.transmitWindow.update(txBytesLeft => newWinSize - (currentWinSize - txBytesLeft)) >> stream.outXFlowSync
-        .offer(())
+        .offer(true)
   }
 
   private[this] def upddateInitialWindowSizeAllStreams(
@@ -636,7 +639,7 @@ class Http2ClientConnection(
                                         )
                                       )
                                       .whenA(rs > Integer.MAX_VALUE)*/
-                                    _ <- stream.outXFlowSync.offer(())
+                                    _ <- stream.outXFlowSync.offer(true)
                                   } yield ()
                                 )
                                 .void
@@ -657,7 +660,7 @@ class Http2ClientConnection(
                                       )
                                     )
                                     .whenA(rs >= Integer.MAX_VALUE)
-                                  _ <- stream.outXFlowSync.offer(())
+                                  _ <- stream.outXFlowSync.offer(true)
                                 } yield ()
                             ))
   }

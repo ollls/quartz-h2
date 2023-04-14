@@ -9,6 +9,7 @@ import io.quartz.MyLogger._
 import java.nio.ByteBuffer
 import io.quartz.http2.model.{Request, Response, Headers, ContentType, StatusCode}
 import io.quartz.http2.Constants._
+import cats.implicits._
 
 trait Http2ConnectionCommon(
     val INITIAL_WINDOW_SIZE: Int,
@@ -124,13 +125,20 @@ trait Http2ConnectionCommon(
             _ <- stream.transmitWindow.update(_ - rlen)
 
             _ <- frames._2 match {
-              case Some(f0) =>
-                stream.outXFlowSync.take >> txWindow_Transmit(stream, f0.buffer, f0.dataLen)
+              case Some(f0) => for {
+                b <- stream.outXFlowSync.take
+                _ <-  IO.raiseError(new java.lang.InterruptedException()).whenA( b == false )
+                _<- txWindow_Transmit(stream, f0.buffer, f0.dataLen)
+              } yield()  
               case None => IO.unit
             }
 
           } yield ())
-        else stream.outXFlowSync.take >> txWindow_Transmit(stream, bb, data_len)
+        else for {
+          b <- stream.outXFlowSync.take
+          _ <-  IO.raiseError(new java.lang.InterruptedException()).whenA( b == false )
+          _ <- txWindow_Transmit(stream, bb, data_len)
+        } yield()  
 
     } yield (bytesCredit)
   }

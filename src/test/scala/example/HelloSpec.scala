@@ -16,13 +16,15 @@ import io.quartz.http2.model.{Headers, Method, ContentType, Request, Response}
 import io.quartz.http2.model.Method._
 import io.quartz.http2._
 
-object SimpleSuite extends IOTestSuite {
+object QuartzH2ClientServerSuite extends IOTestSuite {
   override val timeout = 20.second // Default timeout is 10 seconds
 
   val PORT = 11443
   val FOLDER_PATH = "/Users/ostrygun/web_root/"
   val BIG_FILE = "img_0278.jpeg"
   val BLOCK_SIZE = 1024 * 14
+
+  QuartzH2Server.setLoggingLevel(Level.INFO)
 
   val R: HttpRouteIO = {
     case req @ GET -> Root =>
@@ -40,12 +42,16 @@ object SimpleSuite extends IOTestSuite {
         .Ok()
         .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
         .contentType(ContentType.contentTypeFromFileName(FILE)))
+
+    case req @ POST -> Root / "upload" / StringVar(_) =>
+      for {
+        bytes <- req.stream.compile.count
+      } yield (Response.Ok().asText(s"$bytes"))
   }
 
   test("Parallel streams with GET") {
     val NUMBER_OF_STREAMS = 30
     for {
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.INFO))
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
       server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
 
@@ -64,6 +70,52 @@ object SimpleSuite extends IOTestSuite {
       _ <- fib.join
 
     } yield (assert(list.size == NUMBER_OF_STREAMS))
+  }
+  test("proper 404 handling while sending data") {
+    for {
+      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
+      fib <- (server.startIO(R, sync = false)).start
+      _ <- IO.sleep(1000.millis)
+      c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
+
+      path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
+      fileStream <- IO(new java.io.FileInputStream(path))
+
+      res <- c.doPost("/" + BIG_FILE, fs2.io.readInputStream(IO(fileStream), BLOCK_SIZE, true))
+
+      _ <- Logger[IO].info(s"Response status code=${res.status}")
+
+      c <- c.close()
+      _ <- server.shutdown
+      _ <- fib.join
+    } yield (assert(res.status.value == 404))
+  }
+
+  test("Parallel streams with POST") {
+    val NUMBER_OF_STREAMS = 30
+    for {
+      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
+      fib <- (server.startIO(R, sync = false)).start
+      _ <- IO.sleep(1000.millis)
+      c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
+      path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
+
+      program = for {
+        fileStream <- IO(new java.io.FileInputStream(path))
+        r <- c.doPost("/upload/" + BIG_FILE, fs2.io.readInputStream(IO(fileStream), BLOCK_SIZE, true))
+        bytes <- r.bodyAsText.map( _.toInt)
+      } yield (bytes)
+
+      list <- Parallel.parReplicateA(NUMBER_OF_STREAMS, program)
+      _ <- list.traverse(b => Logger[IO].info(s"Bytes received by server $b"))
+
+      c <- c.close()
+      _ <- server.shutdown
+      _ <- fib.join
+    } yield (assert(true))
 
   }
+
 }
