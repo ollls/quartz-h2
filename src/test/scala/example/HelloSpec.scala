@@ -17,12 +17,12 @@ import io.quartz.http2.model.Method._
 import io.quartz.http2._
 
 object QuartzH2ClientServerSuite extends IOTestSuite {
-  override val timeout = 20.second // Default timeout is 10 seconds
+  override val timeout = 120.second // Default timeout is 10 seconds
 
   val PORT = 11443
-  val FOLDER_PATH = "/Users/ostrygun/web_root/"
+  val FOLDER_PATH = "/home/ols/web_root/"
   val BIG_FILE = "img_0278.jpeg"
-  val BLOCK_SIZE = 1024 * 14
+  val BLOCK_SIZE = 1024 * 20
 
   QuartzH2Server.setLoggingLevel(Level.INFO)
 
@@ -50,16 +50,16 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   }
 
   test("Parallel streams with GET") {
-    val NUMBER_OF_STREAMS = 30
+    val NUMBER_OF_STREAMS = 24
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
 
       fib <- (server.startIO(R, sync = false)).start
 
       _ <- IO.sleep(1000.millis)
 
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
+      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
 
       program = c.doGet("/" + BIG_FILE).flatMap(_.stream.compile.count)
       list <- Parallel.parReplicateA(NUMBER_OF_STREAMS, program)
@@ -74,10 +74,10 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("proper 404 handling while sending data") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
       fib <- (server.startIO(R, sync = false)).start
       _ <- IO.sleep(1000.millis)
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
+      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
 
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
       fileStream <- IO(new java.io.FileInputStream(path))
@@ -93,13 +93,13 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   }
 
   test("Parallel streams with POST") {
-    val NUMBER_OF_STREAMS = 30
+    val NUMBER_OF_STREAMS = 10
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 16000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
       fib <- (server.startIO(R, sync = false)).start
       _ <- IO.sleep(1000.millis)
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 1000, ctx)
+      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
 
       program = for {

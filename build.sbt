@@ -1,10 +1,10 @@
 import Dependencies._
 
-ThisBuild / scalaVersion := "3.2.1"
+ThisBuild / scalaVersion := "3.2.2"
 ThisBuild / version := "0.4.6"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
-ThisBuild / versionScheme := Some("strict")
+ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / developers := List(
   Developer(
     id = "ostrygun",
