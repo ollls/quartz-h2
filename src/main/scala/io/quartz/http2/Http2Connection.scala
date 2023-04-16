@@ -314,7 +314,7 @@ class Http2Connection(
 
   private[this] def updateWindowStream(streamId: Int, inc: Int) = {
     streamTbl.get(streamId) match {
-      case None => Logger[IO].error(s"Update window, streamId=$streamId invalid or closed already")
+      case None => Logger[IO].debug(s"Update window, streamId=$streamId invalid or closed already")
       case Some(stream) =>
         for {
           _ <- stream.transmitWindow.update(_ + inc)
