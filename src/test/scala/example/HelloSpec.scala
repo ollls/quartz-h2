@@ -20,7 +20,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   override val timeout = 120.second // Default timeout is 10 seconds
 
   val PORT = 11443
-  val FOLDER_PATH = "/Users/ostry/web-root/"
+  val FOLDER_PATH = "/Users/ostrygun/web_root/"
   val BIG_FILE = "img_0278.jpeg"
   val BLOCK_SIZE = 1024 * 14
   val NUMBER_OF_STREAMS = 24

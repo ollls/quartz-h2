@@ -17,6 +17,7 @@ import cats.syntax.all.catsSyntaxApplicativeByName
 import concurrent.duration.DurationInt
 import org.typelevel.log4cats.Logger
 import io.quartz.MyLogger._
+import ch.qos.logback.classic.Level
 
 object param1 extends QueryParam("param1")
 object param2 extends QueryParam("param2")
@@ -71,7 +72,7 @@ object MyApp extends IOApp {
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
         reqPath <- IO(Path(HOME_DIR + req.uri.getPath()))
-        _ <- Logger[IO].info( s"Saving: ${reqPath.toString}")
+        _ <- Logger[IO].info(s"Saving: ${reqPath.toString}")
         _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
         // _ <- req.stream.chunks.foreach( bb => IO.sleep( 1000.millis)).compile.drain
 
@@ -86,8 +87,8 @@ object MyApp extends IOApp {
     // perf tests
     case GET -> Root / "test" => IO(Response.Ok())
 
-    //virtual hosting with TLS SNI.
-    //example with SniHostName passed as parmeter for "!" operator 
+    // virtual hosting with TLS SNI.
+    // example with SniHostName passed as parmeter for "!" operator
     case "localhost" ! GET -> Root / "example" =>
       // how to send data in separate H2 packets of various size.
       val ts = Stream.emits("Block1\n".getBytes())
@@ -124,8 +125,12 @@ object MyApp extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] =
     for {
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG)).whenA(args.find(_ == "--debug").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.ERROR)).whenA(args.find(_ == "--error").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF)).whenA(args.find(_ == "--off").isDefined)
+
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) //, incomingWinSize = 1000000)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // , incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)
