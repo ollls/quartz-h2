@@ -1,7 +1,7 @@
 
 <img src="quartz-h2.jpeg" width="84" title="quartz-h2"/>
 
-[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.5-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.5/)
+[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.6-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.6/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)
 
@@ -12,7 +12,7 @@ One more example/template: https://github.com/ollls/quartz-h2-gptapi
 TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons. 
 
 ```
-"io.github.ollls" %% "quartz-h2" % "0.4.5"
+"io.github.ollls" %% "quartz-h2" % "0.4.6"
 ```
 to start server example with IO
 ```
