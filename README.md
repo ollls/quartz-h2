@@ -131,5 +131,5 @@ Start server with "sbt IO/run"
 ./h2spec http2 -h localhost -p 8443 -t -k
 You should get:
 
-Finished in 3.7611 seconds<br>
-94 tests, 92 passed, 1 skipped, 1 failed<br>
+Finished in 1.4891 seconds
+94 tests, 93 passed, 1 skipped, 0 failed
