@@ -125,6 +125,23 @@ POST https://localhost:8443/upload/op.jpeg
 https://nghttp2.org/documentation/h2load-howto.html
 http2 spec compatibility tests: https://formulae.brew.sh/formula/h2spec
 
+
+h2load -D10 -c62 -m30 -t2  https://localhost:8443/test
+```
+finished in 10.01s, 111220.90 req/s, 1.06MB/s
+requests: 1112209 total, 1114069 started, 1112209 done, 1112209 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 1112209 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 10.61MB (11125438) total, 1.06MB (1112209) headers (space savings 90.00%), 0B (0) data
+                     min         max         mean         sd        +/- sd
+time for request:      200us     97.10ms     12.79ms      5.35ms    73.18%
+time for connect:    43.33ms    170.60ms    105.62ms     51.84ms    38.71%
+time to 1st byte:    55.31ms    181.53ms    120.53ms     55.00ms    51.61%
+req/s           :    1762.79     1837.34     1793.33       18.37    69.35%
+
+```
+
+
+
 ### How to run h2spec:
 
 Start server with "sbt IO/run"
