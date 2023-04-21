@@ -36,6 +36,11 @@ object MyApp extends IOApp {
   var HOME_DIR = "/Users/ostrygun/" // last slash is important!
 
   val R: HttpRouteIO = {
+    case req @ GET -> Root / "ldt" =>
+      for {
+        time <- IO(java.time.LocalDateTime.now())
+      } yield (Response.Ok().asText(time.toString()))
+
     case req @ GET -> Root / "snihost" =>
       for {
         _ <-
@@ -98,7 +103,7 @@ object MyApp extends IOApp {
     case GET -> Root / StringVar(file) =>
       val FOLDER_PATH = HOME_DIR + "web_root/"
       val FILE = s"$file"
-      val BLOCK_SIZE = 16000
+      val BLOCK_SIZE = 32000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
         jstream <- IO.blocking(new java.io.FileInputStream(jpath))
@@ -128,9 +133,10 @@ object MyApp extends IOApp {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG)).whenA(args.find(_ == "--debug").isDefined)
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.ERROR)).whenA(args.find(_ == "--error").isDefined)
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF)).whenA(args.find(_ == "--off").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
 
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // , incomingWinSize = 1000000)
+      exitCode <- new QuartzH2Server("localhost", 8080, 16000, null) // , incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)

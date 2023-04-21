@@ -295,25 +295,30 @@ class QuartzH2Server(
       upd = headers11.get("upgrade").getOrElse("")
       _ <- Logger[IO].trace("doConnectUpgrade() - Upgrade = " + upd)
       clientPreface <-
-        if (upd == "h2c") {
-          Logger[IO].trace("doConnectUpgrade() - h2c upgrade requested") *>
-            ch.write(ByteBuffer.wrap(protoSwitch().getBytes)) *>
-            ch.read(
-              HTTP1_KEEP_ALIVE_MS
-            ) // clent preface and remote peer/client setting array  !!!!FIX NEDED
-        } else
-          IO.raiseError(new BadProtocol(ch, "HTTP2 Upgrade Request Denied"))
-      bbuf <- IO(clientPreface.toByteBuffer)
-      isOK <- IO(Frames.checkPreface(bbuf))
-      c <-
-        if (isOK) Http2Connection.make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, http11request)
-        else
-          IO.raiseError(
-            new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")
+        if (upd != "h2c") for {
+          c <- Http11Connection.make(ch, id, keepAliveMs, route)
+          refStart <- Ref.of[IO, Boolean](true)
+          _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(headers11, leftover, refStart).foreverM )(c =>
+            onDisconnect(c.id) >> c.shutdown
           )
-      _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(clientPreface.drop(PrefaceString.length)))(c =>
-        onDisconnect(c.id) >> c.shutdown
-      )
+        } yield ()
+        else
+          for {
+            _ <- Logger[IO].trace(("doConnectUpgrade() - h2c upgrade requested"))
+            _ <- ch.write(ByteBuffer.wrap(protoSwitch().getBytes))
+            clientPreface <- ch.read(HTTP1_KEEP_ALIVE_MS)
+            bbuf <- IO(clientPreface.toByteBuffer)
+            isOK <- IO(Frames.checkPreface(bbuf))
+            c <-
+              if (isOK) Http2Connection.make(ch, id, maxStreams, keepAliveMs, route, incomingWinSize, http11request)
+              else
+                IO.raiseError(
+                  new BadProtocol(ch, "Cannot see HTTP2 Preface, bad protocol")
+                )
+            _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(clientPreface.drop(PrefaceString.length)))(c =>
+              onDisconnect(c.id) >> c.shutdown
+            )
+          } yield ()
     } yield ()
     R.void
   }
@@ -547,7 +552,7 @@ class QuartzH2Server(
             .start
         )
         .iterateUntil(_ => shutdownFlag)
-      _<-  IO(server_ch.close())
+      _ <- IO(server_ch.close())
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
