@@ -381,8 +381,11 @@ class QuartzH2Server(
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
-    // QuartzH2Server.setLoggingLevel( Level.OFF)
+   
     if (sync == false) {
+      /* this is better with max num of parallel H2 streams
+         for example: it gives a raise from 150K to 180K for 30 streams and 32 conns with h2load.
+         now commented out, server is optimized for one conneection, one stream.
       val fjj = new ForkJoinWorkerThreadFactory {
         val num = new AtomicInteger();
         def newThread(pool: ForkJoinPool) = {
@@ -393,13 +396,13 @@ class QuartzH2Server(
         }
       }
       val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
-      // val e = Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
-
+      */
+      val e1 = Executors.newSingleThreadExecutor() //socket groups
       if (sslCtx != null)
-        run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+        run0(e1, R, cores, h2streams, h2IdleTimeOutMs) //.evalOn(ec)
       else
-        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+        run3(e1, R, cores, h2streams, h2IdleTimeOutMs)//.evalOn(ec)
     } else {
       // Loom test commented out, just FYI
       // val e = Executors.newVirtualThreadPerTaskExecutor()
