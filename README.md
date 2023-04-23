@@ -29,7 +29,7 @@ Server code for IO and RIO routes:
 
 ### Loggng
 
-Use .../src/main/resources/logback-test.xml to tailor to your specific requirements.
+Use .../src/main/resources/logback-test.xml to tailor log ouput to your specific requirements.
 
 Also you may use options to control logging level.
 ```
