@@ -27,7 +27,7 @@ Server code for IO and RIO routes:
 * https://github.com/ollls/quartz-h2/blob/main/examples/RIO/src/main/scala/Run.scala
 
 
-### Loggng
+### Loggng.
 
 Use .../src/main/resources/logback-test.xml to tailor log ouput to your specific requirements.
 
