@@ -43,6 +43,8 @@ class FileEventListener(folderPath: String, proc: (File, Kind[Path]) => IO[Unit]
   def listen =
     Logger[IO].info(s"Start listening on file sytem events from ${rootFolder.toString()}") >> worker.foreverM.start
 
+  def close : IO[Unit] = IO(watcher.close())
+
   private def worker: IO[Unit] = {
     IO.blocking(watcher.take())
       .bracket(key =>
