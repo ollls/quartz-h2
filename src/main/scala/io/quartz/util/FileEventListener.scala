@@ -72,9 +72,7 @@ class FileEventListener(folderPath: String, proc: (File, Kind[Path]) => IO[Unit]
               case Some(s) => prev.::(new java.io.File(s.toString()), seg._2)
               case None    => prev
             }
-
           }))
-
           // if new folders, adding a listener on it
           _ <- IO(files.foreach(file => {
             if (file._1.isDirectory() && file._2 == ENTRY_CREATE) {
@@ -82,13 +80,8 @@ class FileEventListener(folderPath: String, proc: (File, Kind[Path]) => IO[Unit]
             }
 
           }))
-
-          // _ <- IO( files.foreach(  f => println( f._1.isDirectory().toString() + " " + f._1.toString() + " " + f._2.name() ) ) )
-          // _ <- IO( files.foreach(  f => proc.tupled(f) ) )
           _ <- files.traverse(proc.tupled(_))
-
           _ <- IO(key.reset())
-
         } yield ()).handleError(e => Logger[IO].error("File System Listener: " + e.toString()))
       )(key => IO(key.reset()))
       .void
