@@ -84,7 +84,7 @@ val filter: WebFilter = (request: Request) =>
 ```
 ### Sync mode with Java Socket Api on blocking pool.
 ```scala
-  exitCode <- new QuartzH2Server("localhost", 8443, 60000, ctx).startIO( R, sync = false)
+  exitCode <- new QuartzH2Server("localhost", 8443, 60000, ctx).startIO( R, sync = true)
 ```
 ### Simple file retrieval.
 ```scala
