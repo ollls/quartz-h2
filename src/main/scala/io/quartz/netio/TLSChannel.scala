@@ -461,7 +461,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
       _ <- IO(f_SSL.engine.setHandshakeApplicationProtocolSelector((eng, list) => {
         if (list.asScala.find(_ == "h2").isDefined) "h2"
-        else ""
+        else "http/1.1"
       }))
 
       x <- doHandshake()

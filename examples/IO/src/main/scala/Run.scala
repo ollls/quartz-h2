@@ -136,7 +136,7 @@ object MyApp extends IOApp {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
 
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8080, 16000, null) // , incomingWinSize = 1000000)
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // , incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)
