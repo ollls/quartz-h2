@@ -1,7 +1,7 @@
 import Dependencies._
 
 ThisBuild / scalaVersion := "3.2.2"
-ThisBuild / version := "0.4.6"
+ThisBuild / version := "0.5.0"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
 ThisBuild / versionScheme := Some("early-semver")
@@ -46,7 +46,7 @@ lazy val root = (project in file("."))
     organization := "io.github.ollls",
     name := "quartz-h2",
     libraryDependencies += scalaTest % Test,
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.9" % "provided",
+    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.0",
     libraryDependencies += "org.typelevel" %% "log4cats-slf4j" % "2.4.0", // Direct Slf4j Support - Recommended
     libraryDependencies += "co.fs2" %% "fs2-core" % "3.4.0",
     libraryDependencies += "co.fs2" %% "fs2-io" % "3.4.0",
