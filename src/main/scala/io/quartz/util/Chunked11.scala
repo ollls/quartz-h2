@@ -37,7 +37,9 @@ object Chunked11 {
   def makeChunkedStream(s1: Stream[IO, Byte], timeOutMs: Int) = {
 
     def go2(s: Stream[IO, Byte], hd: Chunk[Byte]): Pull[IO, Byte, Unit] = {
-      val (chunkSize, offset) = extractChunkLen2(hd)
+      val (chunkSize, offset) =
+        try { extractChunkLen2(hd) } //special case when hd ends exactly on the http/11 chunk header, happens with multipart
+        catch { case e: java.lang.IndexOutOfBoundsException => { (hd.size, 0) } }
       val len = hd.size - offset // actual data avaialble
       // println("INCOMING2>>>: " + chunkSize.toString() + "  " + offset.toString() + "  " + len)
       if (chunkSize == 0) Pull.done
@@ -58,7 +60,9 @@ object Chunked11 {
       s.pull.uncons.flatMap {
         case Some((hd1, tl)) =>
           val hd = leftover ++ hd1
-          val (chunkSize, offset) = extractChunkLen2(hd)
+          val (chunkSize, offset) =
+            try { extractChunkLen2(hd) } //special case when hd ends exactly on the http/11 chunk header, happens with multipart
+            catch { case e: java.lang.IndexOutOfBoundsException => { (hd.size, 0) } }
           val len = hd.size - offset // actual data avaialble
           // println("INCOMING>>>: " + chunkSize.toString() + "  " + offset.toString() + "  " + len)
           if (chunkSize == 0) Pull.done
