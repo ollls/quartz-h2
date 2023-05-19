@@ -1,7 +1,7 @@
 
 <img src="quartz-h2.jpeg" width="84" title="quartz-h2"/>
 
-[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.4.6-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.4.6/)
+[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.5.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.5.1/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)
 
