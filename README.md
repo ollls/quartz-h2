@@ -7,8 +7,8 @@
 To run json-template-qh2 in docker use:
 ```
 sbt assembly
-#docker build -t name:Dockerfile . 
-#docker run -p 8443:8443 -t name:Dockerfile
+docker build -t name:Dockerfile . 
+docker run -p 8443:8443 -t name:Dockerfile
 ```
 
 One more example/template: https://github.com/ollls/quartz-h2-gptapi
