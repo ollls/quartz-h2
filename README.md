@@ -4,6 +4,12 @@
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.5.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.5.1/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)
+To run json-template-qh2 in docker use:
+```
+sbt assembly
+#docker build -t name:Dockerfile . 
+#docker run -p 8443:8443 -t name:Dockerfile
+```
 
 One more example/template: https://github.com/ollls/quartz-h2-gptapi
 
