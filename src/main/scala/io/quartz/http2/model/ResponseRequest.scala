@@ -1,7 +1,7 @@
 package io.quartz.http2.model
 
-import cats.effect.{IO, IOApp, ExitCode, Deferred}
-import fs2.{Stream, Chunk}
+import cats.effect.{IO, Deferred}
+import fs2.{Stream}
 import java.net.URI
 
 /** Represents an HTTP request.

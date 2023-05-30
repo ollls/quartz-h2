@@ -9,12 +9,11 @@ import java.nio.channels.{
 
 import java.util.concurrent.TimeUnit
 import java.nio.channels.Channel
-import cats.effect.{IO, ExitCode}
+import cats.effect.IO
 import java.nio.ByteBuffer
 import fs2.Chunk
 import java.net.StandardSocketOptions
 import java.net.InetSocketAddress
-import java.net.SocketAddress
 import java.util.concurrent.Executors
 
 object TCPChannel {

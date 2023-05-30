@@ -2,7 +2,6 @@
 
 import io.quartz.http2.Constants._
 import java.nio.ByteBuffer
-import cats.syntax.contravariantSemigroupal
 
 object Http2Settings {
 

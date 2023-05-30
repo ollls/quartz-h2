@@ -5,8 +5,6 @@ import cats.implicits._
 import fs2.{Chunk, Pull, Stream}
 import cats.effect.std.{Semaphore, Queue}
 import scala.collection.mutable.ArrayBuffer
-import concurrent.duration.DurationInt
-import java.nio.channels.AsynchronousSocketChannel
 import cats.effect.{FiberIO, IO, Ref, Deferred}
 import java.nio.ByteBuffer
 import io.quartz.http2.Constants._
@@ -14,7 +12,6 @@ import io.quartz.http2.model.{Request, Response, Headers, ContentType, StatusCod
 import io.quartz.netio._
 import org.typelevel.log4cats.Logger
 import io.quartz.MyLogger._
-import io.quartz.http2.routes.Routes
 import java.util.concurrent.atomic.AtomicInteger
 
 object Http2Connection {

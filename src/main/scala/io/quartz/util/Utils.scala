@@ -6,7 +6,6 @@ import cats.implicits._
 
 import io.quartz.netio.IOChannel
 import io.quartz.http2.model.Headers
-import java.io._
 
 object Utils {
 

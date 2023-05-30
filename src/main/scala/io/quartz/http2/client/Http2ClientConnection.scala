@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import java.net.URI
 import cats.implicits._
-import fs2.{Stream, Pull, Chunk}
+import fs2.{Stream, Chunk}
 import cats.effect.{IO, Fiber, Ref}
 import cats.effect.std.Queue
 import java.nio.ByteBuffer
@@ -17,8 +17,6 @@ import cats.effect.Deferred
 import io.quartz.http2.model.{Headers, Method, StatusCode}
 import io.quartz.netio.IOChannel
 import io.quartz.http2.model.Method._
-import io.quartz.http2.HeaderEncoder
-import concurrent.duration.DurationInt
 
 case class ClientResponse(
     status: StatusCode,

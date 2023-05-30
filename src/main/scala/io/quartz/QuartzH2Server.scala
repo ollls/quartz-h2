@@ -1,34 +1,27 @@
 package io.quartz
 
-import cats.effect.{IO, IOApp, Ref, Deferred, ExitCode}
+import cats.effect.{IO, Ref, Deferred, ExitCode}
 
-import fs2.{Stream, Chunk, Pull}
-import fs2.text
+import fs2.{Stream, Chunk}
 
 import io.quartz.http2.Http2Connection
 import io.quartz.netio._
 
 import java.net.InetSocketAddress
 import java.net.SocketAddress
-import java.nio.channels.Channel
-import java.nio.channels.{
-  AsynchronousChannelGroup,
-  AsynchronousServerSocketChannel,
-  AsynchronousSocketChannel,
-  CompletionHandler
-}
+
+import java.nio.channels.AsynchronousChannelGroup
+
 import java.nio.ByteBuffer
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+
 
 import io.quartz.http2.Constants._
 import io.quartz.http2.Frames
 import io.quartz.http2.Http2Settings
 
-import cats.implicits._
+//import cats.implicits._
 import org.typelevel.log4cats.Logger
 import ch.qos.logback.classic.Level
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
 import javax.net.ssl.SSLContext
@@ -36,14 +29,8 @@ import java.security.KeyStore
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.KeyManagerFactory
 
-import scala.concurrent.duration.FiniteDuration
-import concurrent.duration.DurationInt
-
-import java.nio.file.Files
-import io.quartz.http2.model.{Headers, Method, ContentType, Request, Response}
-import io.quartz.http2.model.Method._
+import io.quartz.http2.model.{Headers, Request, Response}
 import io.quartz.http2._
-import io.quartz.http2.routes.RIO
 import io.quartz.http2.routes.HttpRoute
 import io.quartz.http2.routes.Routes
 import io.quartz.http2.routes.HttpRouteRIO
@@ -53,7 +40,6 @@ import io.quartz.http2.routes.WebFilter
 import java.net._
 import java.io._
 import javax.net.ssl.SSLServerSocket
-import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.SSLSocket
 import scala.jdk.CollectionConverters.ListHasAsScala
 import java.util.concurrent.ExecutorService

@@ -1,6 +1,5 @@
 package io.quartz.netio
-import java.net._;
-import java.io._;
+import java.net._
 
 import java.nio.ByteBuffer
 import cats.effect.IO

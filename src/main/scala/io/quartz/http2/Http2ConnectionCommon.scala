@@ -1,13 +1,12 @@
 package io.quartz.http2
 
 import scala.collection.mutable.ArrayBuffer
-import cats.effect.{IO, Ref, Deferred}
+import cats.effect.{IO, Ref}
 import cats.effect.std.{Queue,Semaphore}
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 import java.nio.ByteBuffer
-import io.quartz.http2.model.{Request, Response, Headers, ContentType, StatusCode}
+import io.quartz.http2.model.Headers
 import io.quartz.http2.Constants._
 import cats.implicits._
 

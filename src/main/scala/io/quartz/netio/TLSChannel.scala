@@ -3,27 +3,12 @@ package io.quartz.netio
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngineResult.HandshakeStatus
 import javax.net.ssl.SSLEngineResult.HandshakeStatus._
-import java.net.InetSocketAddress
-import java.net.SocketAddress
 import java.security.KeyStore
-
-import javax.net.ssl.{SSLEngineResult, SSLSession}
-
+import javax.net.ssl.{SSLEngineResult}
 import cats.effect.Ref
-
-import java.util.concurrent.TimeUnit
-import java.nio.channels.Channel
-import cats.effect.{IO, IOApp, ExitCode}
-import java.nio.ByteBuffer
+import cats.effect.IO
 import fs2.Chunk
-
-import java.nio.channels.{
-  AsynchronousChannelGroup,
-  AsynchronousServerSocketChannel,
-  AsynchronousSocketChannel,
-  CompletionHandler
-}
-
+import java.nio.channels.AsynchronousChannelGroup
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import javax.net.ssl.SNIServerName

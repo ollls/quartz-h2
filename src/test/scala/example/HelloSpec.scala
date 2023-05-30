@@ -2,8 +2,6 @@ import scala.concurrent.duration._
 import cats.implicits._
 import cats.effect.IO
 import cats.effect.testing.minitest.IOTestSuite
-import fs2.{Stream, Chunk}
-import fs2.io.file.{Files, Path}
 import cats.Parallel
 
 import io.quartz.MyLogger._
@@ -12,7 +10,7 @@ import ch.qos.logback.classic.Level
 import io.quartz.QuartzH2Server
 import io.quartz.QuartzH2Client
 import io.quartz.http2.routes.HttpRouteIO
-import io.quartz.http2.model.{Headers, Method, ContentType, Request, Response}
+import io.quartz.http2.model.{Method, ContentType, Request, Response}
 import io.quartz.http2.model.Method._
 import io.quartz.http2._
 

@@ -22,8 +22,6 @@ import java.nio.charset.StandardCharsets.US_ASCII
 
 import com.twitter.hpack.Encoder
 import com.twitter.hpack.{Decoder, HeaderListener}
-
-import java.io.ByteArrayInputStream
 import io.quartz.util.ByteBufferInputStream
 import io.quartz.http2.model.Headers
 

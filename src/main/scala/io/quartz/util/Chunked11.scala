@@ -1,7 +1,7 @@
 package io.quartz.util
 import fs2.{Stream, Pull, Chunk}
 import cats.effect.IO
-import io.quartz.netio.IOChannel
+
 
 sealed case class ChunkedEncodingError(msg: String) extends Exception(msg)
 

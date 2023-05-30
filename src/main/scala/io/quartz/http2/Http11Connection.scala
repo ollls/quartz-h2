@@ -1,13 +1,13 @@
 package io.quartz.http2
-import io.quartz.http2.model.{Headers, Method, ContentType, StatusCode, Request, Response}
+import io.quartz.http2.model.{Headers, StatusCode, Request, Response}
 import io.quartz.netio.IOChannel
 import io.quartz.util.ResponseWriters11
-import fs2.{Chunk, Pull, Stream}
+import fs2.{Chunk, Stream}
 import io.quartz.http2.Constants.ErrorGen
 import io.quartz.http2.Constants.Error
 import io.quartz.http2.routes.HttpRoute
 import io.quartz.util.Utils
-import cats.effect.{FiberIO, IO, Ref}
+import cats.effect.{IO, Ref}
 import cats.implicits._
 import org.typelevel.log4cats.Logger
 import io.quartz.MyLogger._

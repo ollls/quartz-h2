@@ -2,10 +2,6 @@ package io.quartz
 
 import cats.effect.IO
 import cats.implicits._
-
-import io.quartz.netio
-import io.quartz.http2.model.Headers
-import io.quartz.http2.model.StatusCode
 import io.quartz.netio.{IOChannel, TCPChannel, TLSChannel}
 
 import java.net.URI
@@ -13,7 +9,6 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.KeyManagerFactory
 import java.nio.channels.{AsynchronousChannelGroup, AsynchronousSocketChannel}
-import java.nio.ByteBuffer
 import java.security.KeyStore
 
 import javax.net.ssl.TrustManager
@@ -24,7 +19,6 @@ import java.io.File
 import io.quartz.http2.Http2ClientConnection
 
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
 object QuartzH2Client {

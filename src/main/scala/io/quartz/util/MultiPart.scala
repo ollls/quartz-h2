@@ -4,11 +4,10 @@ import java.io.FileOutputStream
 import cats.effect.{IO, Ref}
 import cats.implicits.catsSyntaxApplicativeByName
 import fs2.{Chunk, Pull, Stream}
-import io.quartz.http2.model.{Headers, ContentType, Request}
+import io.quartz.http2.model.{Headers, Request}
 import scala.util.control.Breaks._
 
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
 object MultiPart {

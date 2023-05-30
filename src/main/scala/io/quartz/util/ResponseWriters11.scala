@@ -9,7 +9,6 @@ import java.nio.ByteBuffer
 
 //import scala.collection.immutable.ListMap
 import java.io.File
-import java.io.FileInputStream
 import fs2.{Stream, Chunk}
 
 object ResponseWriters11 {

@@ -1,15 +1,10 @@
 package io.quartz.http2.routes
 
 import cats.effect.IO
-import cats.effect.{Sync, LiftIO}
-import cats.implicits._
-import fs2.Stream
-import io.quartz.http2.model.{Request, Response, Headers, StatusCode, Method}
-import cats.Monad
+import io.quartz.http2.model.{Request, Response}
 import cats.data.ReaderT
 
 import org.typelevel.log4cats.Logger
-import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.quartz.MyLogger._
 
 type HttpRoute = Request => IO[Option[Response]]
