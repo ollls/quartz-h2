@@ -108,6 +108,27 @@ val filter: WebFilter = (request: Request) =>
       } 
 ```
 
+### Simple CORS response.
+```scala
+    case GET -> Root / "test" => IO(Response.Ok())
+    case req @ GET -> Root / "json" =>
+      for {
+        //_ <- IO.println(req.headers.printHeaders("\n"))
+        json <- IO(
+          writeToArray(
+            User(
+              name = "John",
+              devices = Seq(Device(id = 2, model = "iPhone X"))
+            )
+          )
+        )
+      } yield (Response
+        .Ok()
+        .hdr("Access-Control-Allow-Origin" -> "*")
+        .asStream(Stream.chunk(Chunk.array(json)))
+        .contentType(JSON))
+```
+
 ### Web site service.
 ```scala
     //your web site files in the folder "web" under web_root.    
