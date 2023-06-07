@@ -110,7 +110,6 @@ val filter: WebFilter = (request: Request) =>
 
 ### Simple CORS response.
 ```scala
-    case GET -> Root / "test" => IO(Response.Ok())
     case req @ GET -> Root / "json" =>
       for {
         //_ <- IO.println(req.headers.printHeaders("\n"))
