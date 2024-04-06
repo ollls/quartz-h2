@@ -478,7 +478,7 @@ class Http2ClientConnection(
         }
         .compile
         .drain
-        .handleError { case _: java.lang.InterruptedException => IO.unit }
+        .handleError { case _: QH2InterruptException => IO.unit }
         .whenA(endStreamInHeaders == false)
 
       lastChunk <- pref.get
@@ -489,7 +489,7 @@ class Http2ClientConnection(
         lastChunk.toByteBuffer
       )
         .traverse(b => sendDataFrame(streamId, b))
-        .handleError { case _: java.lang.InterruptedException => IO.unit }
+        .handleError { case _: QH2InterruptException => IO.unit }
         .whenA(endStreamInHeaders == false)
         .void
       // END OF DATA /////

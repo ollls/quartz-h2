@@ -10,6 +10,9 @@ import io.quartz.http2.model.Headers
 import io.quartz.http2.Constants._
 import cats.implicits._
 
+
+case class QH2InterruptException() extends Throwable
+
 trait Http2ConnectionCommon(
     val INITIAL_WINDOW_SIZE: Int,
     val globalBytesOfPendingInboundData: Ref[IO, Long],
@@ -126,7 +129,7 @@ trait Http2ConnectionCommon(
             _ <- frames._2 match {
               case Some(f0) => for {
                 b <- stream.outXFlowSync.take
-                _ <-  IO.raiseError(new java.lang.InterruptedException()).whenA( b == false )
+                _ <-  IO.raiseError(QH2InterruptException()).whenA( b == false )
                 _<- txWindow_Transmit(stream, f0.buffer, f0.dataLen)
               } yield()  
               case None => IO.unit
@@ -135,7 +138,7 @@ trait Http2ConnectionCommon(
           } yield ())
         else for {
           b <- stream.outXFlowSync.take
-          _ <-  IO.raiseError(new java.lang.InterruptedException()).whenA( b == false )
+          _ <-  IO.raiseError(QH2InterruptException()).whenA( b == false )
           _ <- txWindow_Transmit(stream, bb, data_len)
         } yield()  
 
