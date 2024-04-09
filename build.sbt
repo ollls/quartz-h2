@@ -1,7 +1,7 @@
 import Dependencies._
 
-ThisBuild / scalaVersion := "3.2.2"
-ThisBuild / version := "0.5.1"
+ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / version := "0.7"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
 ThisBuild / versionScheme := Some("early-semver")
@@ -46,13 +46,13 @@ lazy val root = (project in file("."))
     organization := "io.github.ollls",
     name := "quartz-h2",
     libraryDependencies += scalaTest % Test,
-    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.0",
+    libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.4",
     libraryDependencies += "org.typelevel" %% "log4cats-slf4j" % "2.4.0", // Direct Slf4j Support - Recommended
-    libraryDependencies += "co.fs2" %% "fs2-core" % "3.4.0",
-    libraryDependencies += "co.fs2" %% "fs2-io" % "3.4.0",
+    libraryDependencies += "co.fs2" %% "fs2-core" % "3.10.2",
+    libraryDependencies += "co.fs2" %% "fs2-io" % "3.10.2",
     libraryDependencies += "com.twitter" % "hpack" % "1.0.2",
-    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.3.5",
-    libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.4",
+    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.5.3",
+    libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.12",
     libraryDependencies += "org.typelevel" %% "cats-effect-testing-minitest" % "1.5.0" % Test
   )
 
