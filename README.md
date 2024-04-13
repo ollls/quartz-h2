@@ -190,5 +190,10 @@ You should get:
 Finished in 1.4891 seconds
 94 tests, 93 passed, 1 skipped, 0 failed
 ```
+### How to run test cases:
+
+```
+sbt test
+```
 
 
