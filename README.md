@@ -5,20 +5,20 @@
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)<br>
 
-#### Running server with git clone on the code base.
+#### 1. Running server with git clone on the code base.
 Look at https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
 ```
 git clone https://github.com/ollls/quartz-h2.git
 sbt IO/run
 ```
-#### To run "Hello World Template" (json-template-qh2) in docker use:
+#### 2. To run "Hello World Template" (json-template-qh2) in docker use:
 ```
 sbt assembly
 docker build -t name:Dockerfile . 
 docker run -p 8443:8443 -t name:Dockerfile
 ```
 
-#### One more example/template: https://github.com/ollls/quartz-h2-gptapi
+#### 3. One more example/template: https://github.com/ollls/quartz-h2-gptapi
 
 # Asynchronous Java NIO **http/2 TLS** packet streaming server/client.
 
