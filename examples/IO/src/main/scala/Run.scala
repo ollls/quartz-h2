@@ -18,6 +18,7 @@ import concurrent.duration.DurationInt
 import org.typelevel.log4cats.Logger
 import io.quartz.MyLogger._
 import ch.qos.logback.classic.Level
+import io.quartz.util.HttpRangeRequest
 
 object param1 extends QueryParam("param1")
 object param2 extends QueryParam("param2")
@@ -100,17 +101,15 @@ object MyApp extends IOApp {
       val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
       IO(Response.Ok().asStream(ts2))
 
-    case GET -> Root / StringVar(file) =>
-      val FOLDER_PATH = HOME_DIR + "web_root/"
+    //Any regular file or mp4 videos wih Http Range.
+    //Ranged Video streaming tested with Firefox,Safari,Chrome 
+    case req @ GET -> Root / StringVar(file) =>
+      val FOLDER_PATH = "web_root/"
       val FILE = s"$file"
       val BLOCK_SIZE = 32000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-        jstream <- IO.blocking(new java.io.FileInputStream(jpath))
-      } yield (Response
-        .Ok()
-        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
-        .contentType(ContentType.contentTypeFromFileName(FILE)))
+      } yield (HttpRangeRequest.makeResponse(req, jpath, BLOCK_SIZE))
 
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
@@ -136,7 +135,7 @@ object MyApp extends IOApp {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
 
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // , incomingWinSize = 1000000)
+      exitCode <- new QuartzH2Server("localhost", 8443, 0, ctx) // , incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)

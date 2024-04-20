@@ -45,12 +45,15 @@ object ContentType {
   val Font_WOFF = ContentType("font/woff")
   val Font_WOFF2 = ContentType("font/woff2")
   val Application_PDF = ContentType("application/pdf")
+  val Video_MP4 = ContentType("video/mp4")
 
   def contentTypeFromFileName(fileName: String) = {
     val exts = fileName.split("\\.")
     val ext = exts(exts.length - 1)
     ext.toLowerCase() match {
       case "jpg"   => Image_JPEG
+      case "mov"   => Video_MP4
+      case "mp4"   => Video_MP4
       case "jpeg"  => Image_JPEG
       case "ttf"   => Font_TTF
       case "eot"   => Font_VND
