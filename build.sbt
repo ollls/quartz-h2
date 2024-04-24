@@ -68,6 +68,18 @@ lazy val IO = (project in file("examples/IO"))
     name := "example"
   )
 
+  lazy val TAPIR = (project in file("examples/STTP"))
+  .dependsOn(root)
+  .dependsOn(TAPIR_ROUTER)
+  .settings(
+    name := "example",
+    libraryDependencies ++= Seq(
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.19.1",
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.19.1" % "compile-internal"
+    )
+
+  )
+
 lazy val TAPIR_ROUTER = (project in file("tapir-quartz-h2"))
   .dependsOn(root)
   .settings(
@@ -78,8 +90,6 @@ lazy val TAPIR_ROUTER = (project in file("tapir-quartz-h2"))
       "com.softwaremill.sttp.tapir" %% "tapir-jsoniter-scala" % "1.10.5",
       "com.softwaremill.sttp.tapir" %% "tapir-server" % "1.10.5",
       "com.softwaremill.sttp.tapir" %% "tapir-cats-effect" % "1.10.5",
-      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % "2.19.1",
-      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.19.1" % "compile-internal"
     )
   )
 
