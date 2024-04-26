@@ -56,14 +56,14 @@ import sttp.model.MediaType
 import sttp.tapir.generic.auto._
 import java.io.File
 
-case class MultipartForm(pic: Part[File], binary: Part[Array[Byte]])
+case class MultipartForm(pic: Part[File], bytesText1: Part[Array[Byte]])
 object Main extends IOApp {
 
   given codec: JsonValueCodec[User] = JsonCodecMaker.make
 
   def run(args: List[String]): IO[ExitCode] = {
     val bytesPart = Part("part1", "TEXT BODY YY-90".getBytes())
-    val filePart = Part[java.io.File]("part4", java.io.File("web_root/quartz-h2.jpeg"), Some(MediaType.ImageJpeg))
+    val filePart = Part[java.io.File]("part2", java.io.File("web_root/quartz-h2.jpeg"), Some(MediaType.ImageJpeg))
     val form = MultipartForm(filePart, bytesPart)
 
     val mpart = endpoint.get

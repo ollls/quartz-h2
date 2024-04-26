@@ -93,21 +93,19 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
           output = output ++ fs2.Stream.chunk(Chunk.array((CRLF + "--" + boundary + CRLF).getBytes()))
 
           output = output ++ fs2.Stream.chunk(
-            Chunk.array(("Content-Disposition: form-data; name=\"" + part.name + "\"" + CRLF).getBytes())
+            Chunk.array(( s"Content-Disposition: ${part.contentDispositionHeaderValue}" + CRLF).getBytes())
           )
-
           val headers = part.headers.foreach { header =>
             output =
               output ++ fs2.Stream.chunk(Chunk.array((header.name + ": " + header.value + CRLF + CRLF).getBytes()))
           }
-
           m.partType(part.name)
             .foreach(partType =>
               output = output ++ rawValueToEntity(partType.asInstanceOf[RawBodyType[Any]], part.body)._1
             )
         })
         output = output ++ fs2.Stream.chunk(Chunk.array((CRLF + "--" + boundary + "--" + CRLF).getBytes()))
-        (output, Some(boundary))
+        (output.chunkMin( serverOptions.ioChunkSize, allowFewerTotal = true).flatMap( c => Stream.chunk(c)) , Some(boundary))
     }
 
   override def fromRawValue[R](
