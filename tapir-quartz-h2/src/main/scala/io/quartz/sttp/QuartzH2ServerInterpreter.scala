@@ -6,11 +6,7 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.integ.cats.effect.CatsMonadError
 import sttp.tapir.server.interceptor.reject.RejectInterceptor
 import sttp.tapir.server.interceptor.RequestResult
-import sttp.tapir.server.interpreter.{
-  BodyListener,
-  FilterServerEndpoints,
-  ServerInterpreter
-}
+import sttp.tapir.server.interpreter.{BodyListener, FilterServerEndpoints, ServerInterpreter}
 
 import io.quartz.http2.model.Request
 import io.quartz.http2.model.Headers
@@ -26,7 +22,7 @@ trait QuartzH2ServerInterpreter {
       interpreter: ServerInterpreter[
         Nothing,
         IO,
-        Stream[IO, Byte],
+        (Stream[IO, Byte], Option[String]),
         Fs2IOStreams
       ],
       serverRequest: QuartzH2Request
@@ -38,11 +34,15 @@ trait QuartzH2ServerInterpreter {
       case RequestResult.Response(r) => {
         val code = io.quartz.http2.model.StatusCode(r.code.code)
         val hdrs: io.quartz.http2.model.Headers =
-          r.headers.foldLeft(new Headers())((z, h) => z + (h.name, h.value))
+          r.headers.foldLeft(new Headers())((z, h) => z + (h.name.toLowerCase(), h.value))
         val hdrs1 = hdrs + (":status", code.toString())
-        val stream = r.body.getOrElse(Stream.empty)
+        val stream = r.body.getOrElse((Stream.empty, None))._1
+        val new_content_type = r.contentType.flatMap(ct =>
+          if (ct.startsWith("multipart")) Some(ct + "; boundary=" + r.body.get._2.get) else None
+        )
+        val hdrs2 = new_content_type.map(ct => hdrs1.drop("content-type") + ("content-type" -> ct))
 
-        val rsp = io.quartz.http2.model.Response(code, hdrs1, stream)
+        val rsp = io.quartz.http2.model.Response(code, if ( hdrs2.isDefined) hdrs2.get else hdrs1, stream)
 
         IO(Some(rsp))
       }
