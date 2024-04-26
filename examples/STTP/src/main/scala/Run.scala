@@ -71,6 +71,8 @@ object Main extends IOApp {
       .out(multipartBody: EndpointIO.Body[Seq[RawPart], MultipartForm]) // Seq[Part[Array[Byte]]]
       .serverLogic(Unit => IO(Right(form)))
 
+    val top = endpoint.get.in("").errorOut(stringBody).out( stringBody ).serverLogic( Unit => IO(Right("ok")))
+
     val user: Endpoint[Unit, Unit, String, User, Any] =
       endpoint.get.in("user").errorOut(stringBody).out(jsonBody[User])
 
@@ -88,6 +90,7 @@ object Main extends IOApp {
       user.serverLogic(Unit => IO(Right(new User("OLAF", Array(new Device(15, "bb")))))),
       user_post,
       ldt,
+      top,
       mpart
     )
 
