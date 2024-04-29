@@ -10,6 +10,8 @@ Look at https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/
 ```
 git clone https://github.com/ollls/quartz-h2.git
 sbt IO/run
+sbt TAPIR/run
+sbt RIO/run
 ```
 #### 2. To run "Hello World Template" (json-template-qh2) in docker use:
 ```
