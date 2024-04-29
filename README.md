@@ -26,8 +26,9 @@ docker run -p 8443:8443 -t name:Dockerfile
 #### 4. Server configuration guide/document is coming.
 
 # Asynchronous Java NIO **http/2 TLS** packet streaming server/client.
+
+Quartz-HTTP2 now supports Tapir server interpreter from https://tapir.softwaremill.com
 ```
-Now supports Tapir server interpreter with
 "io.github.ollls" %% "tapir-quartz-h2" % "0.7"
 ```
 
