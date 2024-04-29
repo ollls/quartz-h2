@@ -5,6 +5,7 @@
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)<br>
 
+# Quick start
 #### 1. Running server with git clone on the code base.
 * Partial func based route: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
 * Tapir endpoints routes:  https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala
