@@ -22,6 +22,11 @@ docker build -t name:Dockerfile .
 docker run -p 8443:8443 -t name:Dockerfile
 ```
 
+To see tapir based routing example in json-template-qh2
+```
+git checkout tapir
+```
+
 #### 3. One more example/template: https://github.com/ollls/quartz-h2-gptapi
 
 #### 4. Server configuration guide/document is coming.
