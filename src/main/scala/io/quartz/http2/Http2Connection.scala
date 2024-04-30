@@ -119,13 +119,13 @@ object Http2Connection {
   ): IO[ByteBuffer] = for {
 
     bb <- q.take
-    _ <- IO.raiseError(java.nio.channels.ClosedChannelException()).whenA(bb == null)
+    _ <- IO.raiseError(new java.nio.channels.ClosedChannelException()).whenA(bb == null)
     tp <- IO(parseFrame(bb))
     streamId = tp._4
     len = tp._1
     o_stream <- IO(c.getStream((streamId)))
     _ <- IO.raiseError(ErrorGen(streamId, Error.FRAME_SIZE_ERROR, "invalid stream id")).whenA(o_stream.isEmpty)
-    stream: Http2StreamCommon <- IO(o_stream.get)
+    stream <- IO(o_stream.get)
 
     _ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow, len)
     _ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow, len)
@@ -193,7 +193,7 @@ object Http2Connection {
   }
 }
 
-trait Http2StreamCommon(
+class Http2StreamCommon(
     val bytesOfPendingInboundData: Ref[IO, Long],
     val inboundWindow: Ref[IO, Long],
     val transmitWindow: Ref[IO, Long],
@@ -264,7 +264,7 @@ class Http2Connection(
   val headerEncoder = new HeaderEncoder(settings.HEADER_TABLE_SIZE)
   val headerDecoder = new HeaderDecoder(settings.MAX_HEADER_LIST_SIZE, settings.HEADER_TABLE_SIZE)
 
-  val streamTbl = java.util.concurrent.ConcurrentHashMap[Int, Http2Stream](100).asScala
+  val streamTbl = new java.util.concurrent.ConcurrentHashMap[Int, Http2Stream](100).asScala
   def getStream(id: Int): Option[Http2StreamCommon] = streamTbl.get(id)
 
   // var statRefresh = 0
@@ -377,7 +377,7 @@ class Http2Connection(
       case Some(cl) =>
         c.contentLenFromHeader
           .complete(try { Some(cl.toInt) }
-          catch case e: java.lang.NumberFormatException => None)
+          catch { case e: java.lang.NumberFormatException => None })
           .void
 
       case None => c.contentLenFromHeader.complete(None).void
@@ -410,7 +410,7 @@ class Http2Connection(
       active <- Ref[IO].of(true)
 
       c <- IO(
-        Http2Stream(
+        new Http2Stream(
           active,
           d,
           header,
@@ -476,7 +476,7 @@ class Http2Connection(
       active <- Ref[IO].of(true)
 
       c <- IO(
-        Http2Stream(
+        new Http2Stream(
           active,
           d,
           header,
@@ -701,8 +701,12 @@ class Http2Connection(
         .whenA(request.headers.get("te").isDefined && request.headers.get("te").get != "trailers")
 
       response_o <- (httpRoute(request)).handleErrorWith {
-        case e: (java.io.FileNotFoundException | java.nio.file.NoSuchFileException) =>
+        case e: (java.io.FileNotFoundException) =>
           Logger[IO].error(e.toString) >> IO(None)
+
+        case e: (java.nio.file.NoSuchFileException) =>
+          Logger[IO].error(e.toString) >> IO(None)
+
         case e =>
           Logger[IO].error(e.toString) >>
             IO(Some(Response.Error(StatusCode.InternalServerError)))
@@ -889,8 +893,8 @@ class Http2Connection(
                         "stream's Id number is less than previously used Id number"
                       )
                     )
-                    .whenA( streamId <= lastStreamId)
-                  _ <- IO { lastStreamId = streamId }.whenA( streamId != 0 )
+                    .whenA(streamId <= lastStreamId)
+                  _ <- IO { lastStreamId = streamId }.whenA(streamId != 0)
 
                   _ <- priority match {
                     case Some(t3) =>
@@ -970,8 +974,8 @@ class Http2Connection(
                 headersEnded <- haveHeadersEnded(streamId)
                 closed <- hasEnded(streamId)
 
-                t1: Long <- IO(packet.size.toLong - padLen - Constants.HeaderSize - padByte)
-                t2: Long <- IO(len.toLong - padByte - padLen)
+                t1 <- IO(packet.size.toLong - padLen - Constants.HeaderSize - padByte)
+                t2 <- IO(len.toLong - padByte - padLen)
                 _ <- IO
                   .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "DATA frame with invalid pad length"))
                   .whenA(t1 != t2)
@@ -999,7 +1003,7 @@ class Http2Connection(
                       "stream's Id number is less than previously used Id number"
                     )
                   )
-                  .whenA( streamId > lastStreamId  )
+                  .whenA(streamId > lastStreamId)
                 _ <- Logger[IO].debug(s"WINDOW_UPDATE $increment $streamId") >> this
                   .updateWindow(streamId, increment)
                   .handleErrorWith[Unit] {

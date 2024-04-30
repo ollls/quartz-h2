@@ -16,7 +16,7 @@ object HttpRangeRequest {
         Response
           .Ok()
           .hdr("Accept-Ranges", "bytes")
-          .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+          .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true))
           .contentType(ContentType.contentTypeFromFileName(file.getName))
 
       case Some(minmax: Array[String]) =>
@@ -26,7 +26,7 @@ object HttpRangeRequest {
         jstream.getChannel().position(minmax._1.toLong)
         Response
           .Error(StatusCode.PartialContent)
-          .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true).take(minmax._2))
+          .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true).take(minmax._2))
           .hdr("Content-Range", s"bytes ${minmax._1}-${minmax._2}/${file.length()}")
           .contentType(ContentType.contentTypeFromFileName(file.getName))
     }

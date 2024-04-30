@@ -13,8 +13,6 @@ import sttp.tapir.{CodecFormat, RawBodyType, RawPart, WebSocketBodyOutput}
 import java.io.InputStream
 import java.nio.charset.Charset
 
-type QuartzH2ResponseBody = (fs2.Stream[IO, Byte], Option[String])
-
 class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
     extends ToResponseBody[QuartzH2ResponseBody, Fs2IOStreams] {
 

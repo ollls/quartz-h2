@@ -433,7 +433,7 @@ class QuartzH2Server(
 
       _ <- accept
         .flatMap(ch =>
-          (IO(TLSChannel(sslCtx, ch))
+          (IO(new TLSChannel(sslCtx, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
             .flatTap(c =>
               Logger[IO].info(

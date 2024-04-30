@@ -31,7 +31,7 @@ object MultiPart {
       for (i <- 0 to lines.length - 1) {
         val v = lines(i).split(":")
         dataI += lines(i).length + 2
-        if (v.length == 1) { endOfHeaders = true; break }
+        if (v.length == 1) { endOfHeaders = true; break() }
         h_out = h_out + (v(0), v(1))
       }
     }
@@ -47,7 +47,7 @@ object MultiPart {
         cI += 1
         if (bI >= boundary.length()) {
           bFound = true
-          break
+          break()
         }
         if (c == boundary(bI)) bI += 1 else bI = 0
       }
@@ -68,7 +68,7 @@ object MultiPart {
         cI += 1
         if (bI >= boundary.length()) {
           bFound = true
-          break
+          break()
         }
         if (c == boundary(bI)) bI += 1 else bI = 0
       }
@@ -77,13 +77,13 @@ object MultiPart {
     else (false, chunk, Chunk.empty[Byte]) // false - no term, whole chunk
   }
 
-  private def go4_data(s: Stream[IO, Byte], boundary: String): Pull[IO, Headers | Chunk[Byte], Unit] = {
+  private def go4_data(s: Stream[IO, Byte], boundary: String): Pull[IO, Either[Headers, Chunk[Byte]], Unit] = {
     s.pull.uncons.flatMap {
       case Some((hd1, tl)) =>
         val (stop, data_chunk, leftOver) = doMultiPart_scanAndTakeBeforeBoundary(hd1, boundary)
-        if (stop == false) Pull.output(Chunk(data_chunk)) >> go4_data(tl, boundary)
+        if (stop == false) Pull.output(Chunk(Right(data_chunk))) >> go4_data(tl, boundary)
         else if (data_chunk.isEmpty) go4(Headers(), tl.cons(leftOver), boundary, true)
-        else Pull.output(Chunk(data_chunk)) >> go4(Headers(), tl.cons(leftOver), boundary, true)
+        else Pull.output(Chunk(Right(data_chunk))) >> go4(Headers(), tl.cons(leftOver), boundary, true)
       // check hd1 chunk for boundary, return true if boundary return false we do next chunk recursively
       case None => Pull.done
     }
@@ -94,13 +94,13 @@ object MultiPart {
       s: Stream[IO, Byte],
       boundary: String,
       hdrCont: Boolean = false
-  ): Pull[IO, Headers | Chunk[Byte], Unit] = {
+  ): Pull[IO, Either[Headers, Chunk[Byte]], Unit] = {
     s.pull.uncons.flatMap {
       case Some((hd1, tl)) =>
         val chunk = if (hdrCont) hd1 else doMultiPart_scanAndDropBoundary(hd1, boundary)
         val (done, hdr, leftOver) = parseMPHeaders(h, chunk, boundary)
         if (hdr.tbl.isEmpty) Pull.done
-        else if (done) Pull.output(Chunk(hdr)) >> go4_data(tl.cons(leftOver), boundary)
+        else if (done) Pull.output(Chunk(Left(hdr))) >> go4_data(tl.cons(leftOver), boundary)
         else go4(h, tl, boundary, hdrCont = true)
       case None => Pull.done
     }
@@ -116,7 +116,7 @@ object MultiPart {
     * @return
     *   A `Stream` of `Headers` or `Chunk[Byte]` values representing the data in the HTTP request.
     */
-  def stream(req: Request): IO[Stream[IO, Headers | Chunk[Byte]]] = for {
+  def stream(req: Request): IO[Stream[IO, Either[Headers, Chunk[Byte]]]] = for {
     contType <- IO(req.contentType.toString)
     _ <- IO
       .raiseError(new Exception("multipart/form-data content type is missing"))
@@ -124,13 +124,15 @@ object MultiPart {
     boundary <- IO(extractBoundaryFromMultipart(contType))
   } yield (go4(Headers(), req.stream, boundary).stream)
 
-/**
-  * Writes all multipart files from the incoming request data stream to the specified folder.
-  *
-  * @param req The HTTP request containing the multipart data.
-  * @param folderPath The path to the folder where the files should be written.
-  * @return An `IO` action that writes the files to disk.
-  */
+  /** Writes all multipart files from the incoming request data stream to the specified folder.
+    *
+    * @param req
+    *   The HTTP request containing the multipart data.
+    * @param folderPath
+    *   The path to the folder where the files should be written.
+    * @return
+    *   An `IO` action that writes the files to disk.
+    */
   def writeAll(req: Request, folderPath: String): IO[Unit] =
     for {
 
@@ -145,7 +147,7 @@ object MultiPart {
       s0 <- go4(Headers(), req.stream, boundary).stream
         .foreach {
           // each time we have headers we close and create FileOutputStream with file name from headers
-          case h: Headers =>
+          case Left(h) =>
             for {
               _ <- IO {
                 Map.from(
@@ -157,11 +159,11 @@ object MultiPart {
                 )("filename")
               }.flatTap(fname =>
                 fileRef.get.map(fos => if (fos != null)(fos.close())) *> fileRef.set(
-                  FileOutputStream(folderPath + fname)
+                  new FileOutputStream(folderPath + fname)
                 )
               ).flatTap(fileName => Logger[IO].info(s"HTTP multipart request: processing file $fileName"))
             } yield ()
-          case b: Chunk[Byte] =>
+          case Right(b) =>
             for {
               fos <- fileRef.get
               _ <- IO.blocking(fos.write(b.toArray))

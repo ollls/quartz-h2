@@ -39,7 +39,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
         jstream <- IO.blocking(new java.io.FileInputStream(jpath))
       } yield (Response
         .Ok()
-        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+        .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true))
         .contentType(ContentType.contentTypeFromFileName(FILE)))
 
     case req @ POST -> Root / "upload" / StringVar(_) =>
@@ -80,7 +80,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
       fileStream <- IO(new java.io.FileInputStream(path))
 
-      res <- c.doPost("/" + BIG_FILE, fs2.io.readInputStream(IO(fileStream), BLOCK_SIZE, true))
+      res <- c.doPost("/" + BIG_FILE, fs2.io.readInputStream[IO](IO(fileStream), BLOCK_SIZE, true))
 
       _ <- Logger[IO].info(s"Response status code=${res.status}")
 
@@ -101,7 +101,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
 
       program = for {
         fileStream <- IO(new java.io.FileInputStream(path))
-        r <- c.doPost("/upload/" + BIG_FILE, fs2.io.readInputStream(IO(fileStream), BLOCK_SIZE, true))
+        r <- c.doPost("/upload/" + BIG_FILE, fs2.io.readInputStream[IO](IO(fileStream), BLOCK_SIZE, true))
         bytes <- r.bodyAsText.map( _.toInt)
       } yield (bytes)
 

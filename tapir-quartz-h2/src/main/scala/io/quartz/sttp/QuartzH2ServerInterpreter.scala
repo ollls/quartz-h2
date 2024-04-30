@@ -42,7 +42,7 @@ trait QuartzH2ServerInterpreter {
         )
         val hdrs2 = new_content_type.map(ct => hdrs1.drop("content-type") + ("content-type" -> ct))
 
-        val rsp = io.quartz.http2.model.Response(code, if ( hdrs2.isDefined) hdrs2.get else hdrs1, stream)
+        val rsp = io.quartz.http2.model.Response(code, if (hdrs2.isDefined) hdrs2.get else hdrs1, stream)
 
         IO(Some(rsp))
       }
@@ -56,7 +56,7 @@ trait QuartzH2ServerInterpreter {
     implicit val bodyListener: BodyListener[IO, QuartzH2ResponseBody] =
       new QuartzH2BodyListener()
 
-    val interpreter = new ServerInterpreter(
+    val interpreter: ServerInterpreter[Nothing, IO, QuartzH2ResponseBody, Fs2IOStreams] = new ServerInterpreter(
       FilterServerEndpoints(serverEndpoints),
       new QuartzH2RequestBody(serverOptions),
       new QuartzH2ToResponseBody(serverOptions),
