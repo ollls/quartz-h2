@@ -59,19 +59,19 @@ import java.io.File
 case class MultipartForm(pic: Part[File], bytesText1: Part[Array[Byte]])
 object Main extends IOApp {
 
-  given codec: JsonValueCodec[User] = JsonCodecMaker.make
+  implicit val codec: JsonValueCodec[User] = JsonCodecMaker.make
 
   def run(args: List[String]): IO[ExitCode] = {
     val bytesPart = Part("part1", "TEXT BODY YY-90".getBytes())
-    val filePart = Part[java.io.File]("part2", java.io.File("web_root/quartz-h2.jpeg"), Some(MediaType.ImageJpeg))
+    val filePart = Part[java.io.File]("part2", new java.io.File("web_root/quartz-h2.jpeg"), Some(MediaType.ImageJpeg))
     val form = MultipartForm(filePart, bytesPart)
 
     val mpart = endpoint.get
       .in("mpart")
-      .out(multipartBody: EndpointIO.Body[Seq[RawPart], MultipartForm]) // Seq[Part[Array[Byte]]]
-      .serverLogic(Unit => IO(Right(form)))
+      .out(multipartBody[MultipartForm]) // Seq[Part[Array[Byte]]]
+      .serverLogic[IO](Unit => IO(Right(form)))
 
-    val top = endpoint.get.in("").errorOut(stringBody).out( stringBody ).serverLogic( Unit => IO(Right("ok")))
+    val top = endpoint.get.in("").errorOut(stringBody).out(stringBody).serverLogic[IO](Unit => IO(Right("ok")))
 
     val user: Endpoint[Unit, Unit, String, User, Any] =
       endpoint.get.in("user").errorOut(stringBody).out(jsonBody[User])
@@ -79,15 +79,15 @@ object Main extends IOApp {
     val user_post: ServerEndpoint[Any, IO] = endpoint.post
       .in("user")
       .in(jsonBody[User])
-      .serverLogic((u: User) => { println(u); IO(Right(())) })
+      .serverLogic[IO]((u: User) => { println(u); IO(Right(())) })
 
     val ldt: ServerEndpoint[Any, IO] = endpoint.get
       .in("ldt")
       .out(stringBody)
-      .serverLogic(Unit => IO(Right(new java.util.Date().toString())))
+      .serverLogic[IO](Unit => IO(Right(new java.util.Date().toString())))
 
     val serverEndpoints = List(
-      user.serverLogic(Unit => IO(Right(new User("OLAF", Array(new Device(15, "bb")))))),
+      user.serverLogic[IO](Unit => IO(Right(new User("OLAF", Array(new Device(15, "bb")))))),
       user_post,
       ldt,
       top,
