@@ -87,7 +87,6 @@ lazy val TAPIR_ROUTER = (project in file("tapir-quartz-h2"))
     name := "tapir-quartz-h2",
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.tapir" %% "tapir-core" % "1.10.5",
-      "com.softwaremill.sttp.tapir" %% "tapir-jsoniter-scala" % "1.10.5",
       "com.softwaremill.sttp.tapir" %% "tapir-server" % "1.10.5",
       "com.softwaremill.sttp.tapir" %% "tapir-cats-effect" % "1.10.5",
     )
