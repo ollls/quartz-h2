@@ -16,7 +16,8 @@ object HttpRangeRequest {
         Response
           .Ok()
           .hdr("Accept-Ranges", "bytes")
-          .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+          //only 200 with "Accept-Ranges",no data
+          //.asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
           .contentType(ContentType.contentTypeFromFileName(file.getName))
 
       case Some(minmax: Array[String]) =>
