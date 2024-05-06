@@ -149,10 +149,7 @@ def jsonGet = {
 }
 
 def jsonPost = {
-
-  val user: Endpoint[Unit, Unit, String, User, Any] =
-    endpoint.get.in("user").errorOut(stringBody).out(jsonBody[User])
-
+  
   val user_post: ServerEndpoint[Any, IO] = endpoint.post
     .in("user")
     .in(jsonBody[User])
