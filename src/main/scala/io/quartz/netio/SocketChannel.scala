@@ -36,5 +36,8 @@ class SocketChannel(val socket: Socket) extends IOChannel {
     }
 
   }
-  def secure() = true //true only for this implementation
+  def secure() = true // true only for this implementation
+
+  def remoteAddress() = IO(socket.getRemoteSocketAddress())
+
 }

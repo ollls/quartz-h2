@@ -17,7 +17,7 @@ import ch.qos.logback.classic.Level
 
 import com.github.plokhotnyuk.jsoniter_scala.macros._
 import com.github.plokhotnyuk.jsoniter_scala.core._
-import fs2.{Stream, Chunk}
+import fs2.{Stream, Chunk, Pipe}
 
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -65,7 +65,9 @@ import io.quartz.sttp.capabilities.fs2.Fs2IOStreams
 
 val VIDEO_FILE = "web_root/mov_bbb.mp4"
 case class MultipartForm(pic: Part[File], bytesText1: Part[Array[Byte]])
+case class ResponseWS(my_websocket_msg: String, count: Int)
 given codec: JsonValueCodec[User] = JsonCodecMaker.make
+given codecWS: JsonValueCodec[ResponseWS] = JsonCodecMaker.make
 
 ////////////////////////////////////////////////////////////
 def httpRangedVideoEndPoint: ServerEndpoint[Any, IO] = {
@@ -79,7 +81,6 @@ def httpRangedVideoEndPoint: ServerEndpoint[Any, IO] = {
     .out(header(sttp.model.Header.contentType(MediaType("video", "mp4", None, Map.empty))))
 
   val video_play2 = video2.serverLogicSuccess((range: Option[String]) => {
-    println(range.toString())
     val file = java.io.File(VIDEO_FILE)
     val rangeValue = for {
       rR <- range
@@ -149,7 +150,7 @@ def jsonGet = {
 }
 
 def jsonPost = {
-  
+
   val user_post: ServerEndpoint[Any, IO] = endpoint.post
     .in("user")
     .in(jsonBody[User])
@@ -158,9 +159,23 @@ def jsonPost = {
   user_post
 }
 
+import sttp.tapir.Codec.binaryWebSocketFrame
+import sttp.tapir.json.jsoniter.jsoniterCodec
+
 object Main extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] = {
+
+    val wsPipe: Pipe[IO, String, ResponseWS] = requestStream =>
+      requestStream.map(text => {
+        ResponseWS(text, 1)
+      })
+
+    val wse = endpoint.get
+      .in("ws")
+      .out(webSocketBody[String, CodecFormat.TextPlain, ResponseWS, CodecFormat.Json](Fs2IOStreams()))
+
+    val wseL = wse.serverLogicSuccess[IO](data => IO(wsPipe))
 
     val top = endpoint.get.in("").errorOut(stringBody).out(stringBody).serverLogic(Unit => IO(Right("ok")))
 
@@ -176,13 +191,14 @@ object Main extends IOApp {
       jsonPost,
       multiPart,
       httpRangedVideoEndPoint,
-      fileRetrievalAsMp4
+      fileRetrievalAsMp4,
+      wseL
     )
 
     val R2 = QuartzH2ServerInterpreter().toRoutes(serverEndpoints)
 
     for {
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG))
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.INFO))
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
       exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // use 0.0.0.0 for non-local exposure
         .start(R2, sync = false)

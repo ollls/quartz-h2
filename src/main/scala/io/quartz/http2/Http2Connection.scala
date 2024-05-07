@@ -398,7 +398,7 @@ class Http2Connection(
       header <- IO(ArrayBuffer.empty[ByteBuffer])
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
-      dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
+      //dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
       xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
@@ -458,7 +458,7 @@ class Http2Connection(
       header <- IO(ArrayBuffer.empty[ByteBuffer])
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
-      dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
+      //dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
       xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)

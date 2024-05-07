@@ -13,6 +13,7 @@ import org.typelevel.log4cats.Logger
 import io.quartz.MyLogger._
 import cats.effect.kernel.Deferred
 import io.quartz.util.Chunked11
+import io.quartz.websocket.Websocket
 
 case class HeaderSizeLimitExceeded(msg: String) extends Exception(msg)
 case class BadIncomingData(msg: String) extends Exception(msg)
@@ -97,7 +98,8 @@ class Http11Connection[Env](
 
       /* TODO inbbound CHUNKED stream */
       stream <-
-        if (isChunked) IO(Chunked11.makeChunkedStream(body_stream, keepAliveMs).unchunks)
+        if (isWebSocket) IO(body_stream)
+        else if (isChunked) IO(Chunked11.makeChunkedStream(body_stream, keepAliveMs).unchunks)
         else IO(body_stream.take(contentLenL))
 
       emptyTH <- Deferred[IO, Headers] // no trailing headers for 1.1
@@ -134,15 +136,29 @@ class Http11Connection[Env](
 
     _ <- response_o match {
       case Some(response) =>
-        for {
-          _ <- ResponseWriters11.writeFullResponseFromStreamChunked(
-            ch,
-            response.hdr(("Transfer-Encoding" -> "chunked"))
-          )
-          _ <- Logger[IO].info(
-            s"HTTP/1.1 connId=$id streamId=$streamId ${request.method.name} ${request.path} chunked=$requestChunked ${response.code.toString()}"
-          )
-        } yield ()
+        response.websocket match {
+          case None =>
+            for {
+              _ <- ResponseWriters11.writeFullResponseFromStreamChunked(
+                ch,
+                response.hdr(("Transfer-Encoding" -> "chunked"))
+              )
+              _ <- Logger[IO].info(
+                s"HTTP/1.1 connId=$id streamId=$streamId ${request.method.name} ${request.path} chunked=$requestChunked ${response.code.toString()}"
+              )
+            } yield ()
+          case Some(pipe) =>
+            val wsctx = Websocket()
+            for {
+              _ <- wsctx.accept(ch, request)
+              // apply a Pipe
+              p <- pipe
+              inFrames <- IO(wsctx.makeFrameStream(request.stream))
+              outFrames <- IO(inFrames.through(p))
+              _ <- outFrames.foreach(frame => wsctx.writeFrame(ch, frame)).compile.drain
+
+            } yield ()
+        }
       case None =>
         Logger[IO].error(
           s"HTTP/1.1 connId=$id streamId=$streamId ${request.method.name} ${request.path} ${StatusCode.NotFound.toString()}"
