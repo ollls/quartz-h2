@@ -12,6 +12,7 @@ import sttp.tapir.model.WebSocketFrameDecodeFailure
 import sttp.tapir.{DecodeResult, WebSocketBodyOutput}
 import sttp.ws.WebSocketFrame
 import cats.effect.implicits._
+import sttp.tapir.DecodeResult._
 
 object QuartzH2WebSockets {
 
@@ -19,7 +20,6 @@ object QuartzH2WebSockets {
       pipe: Pipe[IO, REQ, RESP],
       o: WebSocketBodyOutput[Pipe[IO, REQ, RESP], REQ, RESP, _, Fs2IOStreams]
   ): IO[Pipe[IO, QuartzH2WebSocketFrame, QuartzH2WebSocketFrame]] = {
-
     if ((!o.autoPongOnPing) && o.autoPing.isEmpty) IO.delay {
       // fast track: lift Http4sWebSocketFrames into REQ, run through pipe, convert RESP back to Http4sWebSocketFrame
 
@@ -32,7 +32,7 @@ object QuartzH2WebSockets {
           ignorePongs
             .map { f =>
               o.requests.decode(f) match {
-                case x: DecodeResult.Value[REQ]    => x.v
+                case Value(x)    => x
                 case failure: DecodeResult.Failure => throw new WebSocketFrameDecodeFailure(f, failure)
               }
             }
@@ -63,7 +63,7 @@ object QuartzH2WebSockets {
             val outputProducer = autoPongs
               .map { f =>
                 o.requests.decode(f) match {
-                  case x: DecodeResult.Value[REQ]    => x.v
+                  case Value(x)    => x
                   case failure: DecodeResult.Failure => throw new WebSocketFrameDecodeFailure(f, failure)
                 }
               }
