@@ -3,6 +3,7 @@ package io.quartz.netio
 import java.nio.ByteBuffer
 import cats.effect.IO
 import fs2.Chunk
+import java.net.SocketAddress
 
 trait IOChannel {
   def read( timeOut: Int): IO[Chunk[Byte]]
@@ -11,5 +12,6 @@ trait IOChannel {
   def secure() : Boolean
   //used in TLS mode to pass parameter from SNI tls extension
   def sniServerNames() : Option[Array[String]] = None
+  def remoteAddress() : IO[SocketAddress]
 
 }

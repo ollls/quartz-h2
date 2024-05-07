@@ -137,7 +137,7 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
   override def fromWebSocketPipe[REQ, RESP](
       pipe: streams.Pipe[REQ, RESP],
       o: WebSocketBodyOutput[streams.Pipe[REQ, RESP], REQ, RESP, _, Fs2IOStreams]
-  ): QuartzH2ResponseBody = ??? // Left(Http4sWebSockets.pipeToBody(pipe, o))
+  ): QuartzH2ResponseBody = Left(QuartzH2WebSockets.pipeToBody(pipe, o))
 
   private def inputStreamToFs2(inputStream: () => InputStream) =
     fs2.io.readInputStream(

@@ -1,8 +1,9 @@
 package io.quartz.http2.model
 
 import cats.effect.{IO, Deferred}
-import fs2.{Stream}
+import fs2.{Stream, Pipe}
 import java.net.URI
+import io.quartz.websocket.WebSocketFrame
 
 /** Represents an HTTP request.
   *
@@ -134,10 +135,13 @@ object Response {
   * @param stream
   *   the response body as a `Stream` of bytes. Defaults to an empty stream.
   */
+
+// IO[Pipe[IO, QuartzH2WebSocketFrame, QuartzH2WebSocketFrame]]
 sealed case class Response(
     code: StatusCode,
     headers: Headers,
-    stream: Stream[IO, Byte] = Stream.empty
+    stream: Stream[IO, Byte] = Stream.empty,
+    websocket: Option[IO[Pipe[IO, WebSocketFrame, WebSocketFrame]]] = None
 ) {
 
   /** Adds the given headers to the response headers. */
@@ -155,6 +159,9 @@ sealed case class Response(
   /** Sets the response body to the given `Stream` of bytes. */
   def asStream(s0: Stream[IO, Byte]) =
     new Response(this.code, this.headers, s0)
+
+  def asWebsocketPipe(pipe: IO[Pipe[IO, WebSocketFrame, WebSocketFrame]]) =
+    new Response(this.code, this.headers, this.stream, Some(pipe))
 
   /** Sets the response body to the given text string, encoded as bytes. */
   def asText(text: String) = new Response(this.code, this.headers, Stream.emits(text.getBytes()))

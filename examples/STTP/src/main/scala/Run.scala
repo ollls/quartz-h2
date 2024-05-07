@@ -65,7 +65,7 @@ import io.quartz.sttp.capabilities.fs2.Fs2IOStreams
 
 val VIDEO_FILE = "web_root/mov_bbb.mp4"
 case class MultipartForm(pic: Part[File], bytesText1: Part[Array[Byte]])
-case class ResponseWS(msg: String, count: Int)
+case class ResponseWS(my_websocket_msg: String, count: Int)
 given codec: JsonValueCodec[User] = JsonCodecMaker.make
 given codecWS: JsonValueCodec[ResponseWS] = JsonCodecMaker.make
 
@@ -81,7 +81,6 @@ def httpRangedVideoEndPoint: ServerEndpoint[Any, IO] = {
     .out(header(sttp.model.Header.contentType(MediaType("video", "mp4", None, Map.empty))))
 
   val video_play2 = video2.serverLogicSuccess((range: Option[String]) => {
-    println(range.toString())
     val file = java.io.File(VIDEO_FILE)
     val rangeValue = for {
       rR <- range
@@ -167,12 +166,16 @@ object Main extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] = {
 
-    val wsPipe: Pipe[IO, String, ResponseWS] = requestStream => requestStream.map(text => ResponseWS(text, 1))
+    val wsPipe: Pipe[IO, String, ResponseWS] = requestStream =>
+      requestStream.map(text => {
+        ResponseWS(text, 1)
+      })
 
     val wse = endpoint.get
       .in("ws")
       .out(webSocketBody[String, CodecFormat.TextPlain, ResponseWS, CodecFormat.Json](Fs2IOStreams()))
-    val wseL = wse.serverLogicSuccess[IO](data => { println("SERVER LOGIC FOR WS"); IO(wsPipe) })
+
+    val wseL = wse.serverLogicSuccess[IO](data => IO(wsPipe))
 
     val top = endpoint.get.in("").errorOut(stringBody).out(stringBody).serverLogic(Unit => IO(Right("ok")))
 
@@ -195,7 +198,7 @@ object Main extends IOApp {
     val R2 = QuartzH2ServerInterpreter().toRoutes(serverEndpoints)
 
     for {
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE))
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.INFO))
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
       exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // use 0.0.0.0 for non-local exposure
         .start(R2, sync = false)
