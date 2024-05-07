@@ -12,7 +12,7 @@
 ```
 git clone https://github.com/ollls/quartz-h2.git
 sbt IO/run
-sbt TAPIR/run
+sbt TAPIR/run   ( Try: https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged video streams with Tapir )
 sbt RIO/run
 ```
 #### 2. To run "Hello World Template" (json-template-qh2) in docker use:
