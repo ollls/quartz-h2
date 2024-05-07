@@ -14,7 +14,6 @@ import java.nio.channels.AsynchronousChannelGroup
 
 import java.nio.ByteBuffer
 
-
 import io.quartz.http2.Constants._
 import io.quartz.http2.Frames
 import io.quartz.http2.Http2Settings
@@ -284,7 +283,7 @@ class QuartzH2Server(
         if (upd != "h2c") for {
           c <- Http11Connection.make(ch, id, keepAliveMs, route)
           refStart <- Ref.of[IO, Boolean](true)
-          _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(headers11, leftover, refStart).foreverM )(c =>
+          _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(headers11, leftover, refStart).foreverM)(c =>
             onDisconnect(c.id) >> c.shutdown
           )
         } yield ()
@@ -475,7 +474,9 @@ class QuartzH2Server(
           IO {
             c.setUseClientMode(false);
             c.setHandshakeApplicationProtocolSelector((eng, list) => {
+
               if (list.asScala.find(_ == "h2").isDefined) "h2"
+              else if (list.asScala.find(_ == "http/1.1").isDefined) "http/1.1"
               else null
             })
           }
