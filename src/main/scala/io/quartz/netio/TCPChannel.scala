@@ -95,6 +95,8 @@ class TCPChannel( val ch: AsynchronousSocketChannel) extends IOChannel {
     } yield (n.intValue())
   }
 
+  def remoteAddress() = IO(ch.getRemoteAddress())
+
   def rcvBufSize(nBytes: Int) = {
     ch.setOption[Integer](StandardSocketOptions.SO_RCVBUF, nBytes)
   }

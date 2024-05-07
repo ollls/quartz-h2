@@ -368,6 +368,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   }
 
   def secure() = true
+  def remoteAddress() = rch.remoteAddress()
 
   class SniName(sniServerName: String) extends SNIServerName(0, sniServerName.getBytes())
   def ssl_initClent_h2(sniServerName: String): IO[Unit] = {
