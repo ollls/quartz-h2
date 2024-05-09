@@ -175,16 +175,20 @@ object Main extends IOApp {
       .in("ws")
       .out(webSocketBody[String, CodecFormat.TextPlain, ResponseWS, CodecFormat.Json](Fs2IOStreams()))
 
+
     val wseL = wse.serverLogicSuccess[IO](data => IO(wsPipe))
 
     val top = endpoint.get.in("").errorOut(stringBody).out(stringBody).serverLogic(Unit => IO(Right("ok")))
 
+
     val ldt: ServerEndpoint[Any, IO] = endpoint.get
       .in("ldt")
       .out(stringBody)
-      .serverLogic(Unit => IO(Right(new java.util.Date().toString())))
+      .serverLogic[IO](Unit => IO(Right(new java.util.Date().toString())))
 
     val serverEndpoints = List(
+
+
       top,
       ldt,
       jsonGet,

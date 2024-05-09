@@ -2,7 +2,6 @@ package io.quartz.util
 import fs2.{Stream, Pull, Chunk}
 import cats.effect.IO
 
-
 sealed case class ChunkedEncodingError(msg: String) extends Exception(msg)
 
 object Chunked11 {
@@ -24,10 +23,23 @@ object Chunked11 {
     var l = List.empty[Char]
     var c: Byte = 0
     var i: Int = 0
+
+    c = db(i)
+    i += 1
+
+    while (c != '\r' && i < 8)
+    {
+      l = l.appended(c.toChar)
+      c = db(i)
+      i += 1
+    }
+
+    /*
     while {
       { c = db(i); i += 1 }
       c != '\r' && i < 8 // 8 chars for chunked len
-    } do (l = l.appended(c.toChar))
+    } do (l = l.appended(c.toChar))*/
+
     if (c == '\r' && db(i) == '\n') i += 1
     else throw (new ChunkedEncodingError(""))
     (Integer.parseInt(l.mkString, 16), i)
@@ -38,7 +50,9 @@ object Chunked11 {
 
     def go2(s: Stream[IO, Byte], hd: Chunk[Byte]): Pull[IO, Byte, Unit] = {
       val (chunkSize, offset) =
-        try { extractChunkLen2(hd) } //special case when hd ends exactly on the http/11 chunk header, happens with multipart
+        try {
+          extractChunkLen2(hd)
+        } // special case when hd ends exactly on the http/11 chunk header, happens with multipart
         catch { case e: java.lang.IndexOutOfBoundsException => { (hd.size, 0) } }
       val len = hd.size - offset // actual data avaialble
       // println("INCOMING2>>>: " + chunkSize.toString() + "  " + offset.toString() + "  " + len)
@@ -61,7 +75,9 @@ object Chunked11 {
         case Some((hd1, tl)) =>
           val hd = leftover ++ hd1
           val (chunkSize, offset) =
-            try { extractChunkLen2(hd) } //special case when hd ends exactly on the http/11 chunk header, happens with multipart
+            try {
+              extractChunkLen2(hd)
+            } // special case when hd ends exactly on the http/11 chunk header, happens with multipart
             catch { case e: java.lang.IndexOutOfBoundsException => { (hd.size, 0) } }
           val len = hd.size - offset // actual data avaialble
           // println("INCOMING>>>: " + chunkSize.toString() + "  " + offset.toString() + "  " + len)

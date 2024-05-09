@@ -40,13 +40,15 @@ class Http11Connection[Env](
     Logger[IO].debug("Http11Connection.shutdown")
 
   def translateHeadersFrom11to2(headers: Headers): Headers = {
-    val map = headers.tbl.map((k, v) => {
-      val k1 = k.toLowerCase() match {
-        case "host"    => ":authority"
-        case k: String => k
+    val map = headers.tbl.map {
+      case (k, v) => {
+        val k1 = k.toLowerCase() match {
+          case "host"    => ":authority"
+          case k: String => k
+        }
+        (k1, v)
       }
-      (k1, v)
-    })
+    }
 
     new Headers(map)
   }
@@ -126,9 +128,13 @@ class Http11Connection[Env](
       .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "Upercase letters in the header keys"))
       .whenA(request.headers.ensureLowerCase == false)
 
-    response_o: Option[Response] <- (httpRoute(request)).handleErrorWith {
-      case e: (java.io.FileNotFoundException | java.nio.file.NoSuchFileException) =>
+    response_o <- httpRoute(request).handleErrorWith {
+      case e: (java.io.FileNotFoundException) =>
         Logger[IO].debug(e.toString) >> IO(None)
+
+      case e: (java.nio.file.NoSuchFileException) =>
+        Logger[IO].debug(e.toString) >> IO(None)
+
       case e =>
         Logger[IO].debug(e.toString) >>
           IO(Some(Response.Error(StatusCode.InternalServerError)))

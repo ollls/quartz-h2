@@ -52,7 +52,9 @@ trait QuartzH2ServerInterpreter {
     interpreter(serverRequest).flatMap {
       case x: RequestResult.Failure => { IO(None) }
       case RequestResult.Response(r) => {
+
         val rsp = serverResponseToQuartzH2Response(r)
+
         IO(Some(rsp))
       }
     }
@@ -65,7 +67,7 @@ trait QuartzH2ServerInterpreter {
     implicit val bodyListener: BodyListener[IO, QuartzH2ResponseBody] =
       new QuartzH2BodyListener()
 
-    val interpreter = new ServerInterpreter(
+    val interpreter: ServerInterpreter[Nothing, IO, QuartzH2ResponseBody, Fs2IOStreams] = new ServerInterpreter(
       FilterServerEndpoints(serverEndpoints),
       new QuartzH2RequestBody(serverOptions),
       new QuartzH2ToResponseBody(serverOptions),
