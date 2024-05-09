@@ -44,7 +44,7 @@ trait QuartzH2ServerInterpreter {
   }
 
   def toResponse(
-      interpreter: ServerInterpreter[Fs2IOStreams & WebSockets, IO, Either[IO[
+      interpreter: ServerInterpreter[Fs2IOStreams with WebSockets, IO, Either[IO[
         Pipe[IO, QuartzH2WebSocketFrame, QuartzH2WebSocketFrame]
       ], (Stream[IO, Byte], Option[String])], Fs2IOStreams],
       serverRequest: QuartzH2Request
@@ -61,13 +61,13 @@ trait QuartzH2ServerInterpreter {
   }
 
   def toRoutes(
-      serverEndpoints: List[ServerEndpoint[Fs2IOStreams & WebSockets, IO]]
+      serverEndpoints: List[ServerEndpoint[Fs2IOStreams with WebSockets, IO]]
   ) = {
     implicit val monad: CatsMonadError[IO] = new CatsMonadError[IO]
     implicit val bodyListener: BodyListener[IO, QuartzH2ResponseBody] =
       new QuartzH2BodyListener()
 
-    val interpreter: ServerInterpreter[Nothing, IO, QuartzH2ResponseBody, Fs2IOStreams] = new ServerInterpreter(
+    val interpreter: ServerInterpreter[Fs2IOStreams with WebSockets, IO, QuartzH2ResponseBody, Fs2IOStreams] = new ServerInterpreter(
       FilterServerEndpoints(serverEndpoints),
       new QuartzH2RequestBody(serverOptions),
       new QuartzH2ToResponseBody(serverOptions),
