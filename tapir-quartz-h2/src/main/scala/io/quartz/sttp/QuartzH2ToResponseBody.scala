@@ -3,15 +3,21 @@ package io.quartz.sttp
 import cats.effect.IO
 import cats.syntax.all._
 import fs2.io.file.Files
-import fs2.{Chunk, Stream}
+import fs2.{Chunk, Stream, Pipe}
 
 import io.quartz.sttp.capabilities.fs2.Fs2IOStreams
 import sttp.model.{HasHeaders, HeaderNames, Part}
 import sttp.tapir.server.interpreter.ToResponseBody
 import sttp.tapir.{CodecFormat, RawBodyType, RawPart, WebSocketBodyOutput}
+import io.quartz.websocket.{WebSocketFrame => QuartzH2WebSocketFrame}
 
 import java.io.InputStream
 import java.nio.charset.Charset
+
+type QuartzH2ResponseBody = Either[
+  IO[Pipe[IO, QuartzH2WebSocketFrame, QuartzH2WebSocketFrame]],
+  (fs2.Stream[IO, Byte], Option[String])
+]
 
 class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
     extends ToResponseBody[QuartzH2ResponseBody, Fs2IOStreams] {
@@ -37,7 +43,10 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
 
   override val streams: Fs2IOStreams = Fs2IOStreams()
 
-  private def rawValueToEntity[CF <: CodecFormat, R](bodyType: RawBodyType[R], v: R): QuartzH2ResponseBody =
+  private def rawValueToEntity[CF <: CodecFormat, R](
+      bodyType: RawBodyType[R],
+      v: R
+  ): (fs2.Stream[IO, Byte], Option[String]) =
     bodyType match {
 
       case RawBodyType.StringBody(charset) =>
@@ -91,7 +100,7 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
           output = output ++ fs2.Stream.chunk(Chunk.array((CRLF + "--" + boundary + CRLF).getBytes()))
 
           output = output ++ fs2.Stream.chunk(
-            Chunk.array(( s"Content-Disposition: ${part.contentDispositionHeaderValue}" + CRLF).getBytes())
+            Chunk.array((s"Content-Disposition: ${part.contentDispositionHeaderValue}" + CRLF).getBytes())
           )
           val headers = part.headers.foreach { header =>
             output =
@@ -103,7 +112,10 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
             )
         })
         output = output ++ fs2.Stream.chunk(Chunk.array((CRLF + "--" + boundary + "--" + CRLF).getBytes()))
-        (output.chunkMin( serverOptions.ioChunkSize, allowFewerTotal = true).flatMap( c => Stream.chunk(c)) , Some(boundary))
+        (
+          output.chunkMin(serverOptions.ioChunkSize, allowFewerTotal = true).flatMap(c => Stream.chunk(c)),
+          Some(boundary)
+        )
     }
 
   override def fromRawValue[R](
@@ -112,7 +124,7 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
       format: CodecFormat,
       bodyType: RawBodyType[R]
   ): QuartzH2ResponseBody = {
-    rawValueToEntity(bodyType, r)
+    Right(rawValueToEntity(bodyType, r))
   }
 
   override def fromStreamValue(
@@ -120,17 +132,17 @@ class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
       headers: HasHeaders,
       format: CodecFormat,
       charset: Option[Charset]
-  ): QuartzH2ResponseBody = (v, None)
+  ): QuartzH2ResponseBody = Right(v, None)
 
   override def fromWebSocketPipe[REQ, RESP](
       pipe: streams.Pipe[REQ, RESP],
       o: WebSocketBodyOutput[streams.Pipe[REQ, RESP], REQ, RESP, _, Fs2IOStreams]
-  ): QuartzH2ResponseBody = ??? // Left(Http4sWebSockets.pipeToBody(pipe, o))
+  ): QuartzH2ResponseBody = Left(QuartzH2WebSockets.pipeToBody(pipe, o))
 
   private def inputStreamToFs2(inputStream: () => InputStream) =
     fs2.io.readInputStream(
       IO.blocking(inputStream()),
       serverOptions.ioChunkSize
     )
-  
+
 }

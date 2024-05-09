@@ -368,6 +368,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   }
 
   def secure() = true
+  def remoteAddress() = rch.remoteAddress()
 
   class SniName(sniServerName: String) extends SNIServerName(0, sniServerName.getBytes())
   def ssl_initClent_h2(sniServerName: String): IO[Unit] = {
@@ -500,7 +501,8 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
             if (stat == SSLEngineResult.Status.BUFFER_UNDERFLOW || stat == SSLEngineResult.Status.BUFFER_OVERFLOW)
               IO(0)
             else
-              IO.raiseError(new TLSChannelError("AsynchronousTlsByteChannel#read() " + res.toString()))
+              IO.raiseError(new TLSChannelError("AsynchronousTlsByteChannel#read() connection closed"))
+              //IO.raiseError(new TLSChannelError("AsynchronousTlsByteChannel#read()" + res.toString()))
           } else IO(IN_J_BUFFER.remaining())
       } yield (rem)
       _ <- loop.iterateWhile(_ != 0)
