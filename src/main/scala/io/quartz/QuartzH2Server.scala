@@ -14,7 +14,6 @@ import java.nio.channels.AsynchronousChannelGroup
 
 import java.nio.ByteBuffer
 
-
 import io.quartz.http2.Constants._
 import io.quartz.http2.Frames
 import io.quartz.http2.Http2Settings
@@ -109,7 +108,7 @@ class QuartzH2Server(
     HOST: String,
     PORT: Int,
     h2IdleTimeOutMs: Int,
-    sslCtx: SSLContext,
+    sslCtx: Option[SSLContext],
     incomingWinSize: Int = 65535,
     onConnect: Long => IO[Unit] = _ => IO.unit,
     onDisconnect: Long => IO[Unit] = _ => IO.unit
@@ -284,7 +283,7 @@ class QuartzH2Server(
         if (upd != "h2c") for {
           c <- Http11Connection.make(ch, id, keepAliveMs, route)
           refStart <- Ref.of[IO, Boolean](true)
-          _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(headers11, leftover, refStart).foreverM )(c =>
+          _ <- IO(c).bracket(c => onConnect(c.id) >> c.processIncoming(headers11, leftover, refStart).foreverM)(c =>
             onDisconnect(c.id) >> c.shutdown
           )
         } yield ()
@@ -364,6 +363,40 @@ class QuartzH2Server(
     start(Routes.of(env, pf, filter), sync)
   }
 
+  //////////////////////////////////////////////////////////////////////////////////////////////
+  // Can be used with JDK on Virtual Threads with tradional sync(now virtual) Java Sockets
+  // val e = Executors.newVirtualThreadPerTaskExecutor()
+  def startSync(
+      R: HttpRoute,
+      sync: Boolean,
+      executor: ExecutorService,
+      maxH2Streams: Int = 99
+  ): IO[ExitCode] = {
+    val ec = ExecutionContext.fromExecutor(executor)
+    if (sslCtx.isDefined)
+      run1(R, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
+    else
+      IO.raiseError(
+        new Exception("Can not start Java Sockets without TLSContext, plain Java Sockets are not supported")
+      )
+  }
+
+  //////////////////////////////////////////////////////////////////////////////////////////////
+  // Usefull for running server on different thread pools, like FixedThreadPool, etc
+  def startAsync(
+      R: HttpRoute,
+      sync: Boolean,
+      executor: ExecutorService,
+      numOfCores: Int = Runtime.getRuntime().availableProcessors(),
+      maxH2Streams: Int = 99
+  ): IO[ExitCode] = {
+    val ec = ExecutionContext.fromExecutor(executor)
+    if (sslCtx.isDefined)
+      run0(executor, R, numOfCores, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
+    else
+      run3(executor, R, numOfCores, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
+  }
+
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
@@ -379,10 +412,10 @@ class QuartzH2Server(
         }
       }
       val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
-      // val e = Executors.newFixedThreadPool(cores * 2);
+      // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
 
-      if (sslCtx != null)
+      if (sslCtx.isDefined)
         run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
       else
         run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
@@ -390,7 +423,7 @@ class QuartzH2Server(
       // Loom test commented out, just FYI
       // val e = Executors.newVirtualThreadPerTaskExecutor()
       // val ec = ExecutionContext.fromExecutor(e)
-      run1(R, cores, h2streams, h2IdleTimeOutMs)
+      run1(R, h2streams, h2IdleTimeOutMs)
     }
   }
 
@@ -433,7 +466,7 @@ class QuartzH2Server(
 
       _ <- accept
         .flatMap(ch =>
-          (IO(TLSChannel(sslCtx, ch))
+          (IO(TLSChannel(sslCtx.get, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
             .flatTap(c =>
               Logger[IO].info(
@@ -455,18 +488,18 @@ class QuartzH2Server(
     } yield (ExitCode.Success)
   }
 
-  def run1(R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+  def run1(R: HttpRoute, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       addr <- IO(new InetSocketAddress(HOST, PORT))
       _ <- Logger[IO].info("HTTP/2 TLS Service: QuartzH2 sync mode (sockets)")
-      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"Max number of H2 streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
       _ <- Logger[IO].info(s"Listens: ${addr.getHostString()}:${addr.getPort().toString()}")
 
       conId <- Ref[IO].of(0L)
 
       server_ch <- IO(
-        sslCtx.getServerSocketFactory().createServerSocket(PORT, 0, addr.getAddress()).asInstanceOf[SSLServerSocket]
+        sslCtx.get.getServerSocketFactory().createServerSocket(PORT, 0, addr.getAddress()).asInstanceOf[SSLServerSocket]
       )
 
       accept = IO
@@ -475,7 +508,9 @@ class QuartzH2Server(
           IO {
             c.setUseClientMode(false);
             c.setHandshakeApplicationProtocolSelector((eng, list) => {
+
               if (list.asScala.find(_ == "h2").isDefined) "h2"
+              else if (list.asScala.find(_ == "http/1.1").isDefined) "http/1.1"
               else null
             })
           }
