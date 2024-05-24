@@ -202,7 +202,7 @@ def multiPart = {
     for {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.INFO))
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 16000, ctx) // use 0.0.0.0 for non-local exposure
+      exitCode <- new QuartzH2Server("localhost", 8443, 16000, Some(ctx)) // use 0.0.0.0 for non-local exposure
         .start(R2, sync = false)
 
     } yield (exitCode)

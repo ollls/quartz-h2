@@ -101,8 +101,8 @@ object MyApp extends IOApp {
       val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
       IO(Response.Ok().asStream(ts2))
 
-    //Any regular file or mp4 videos wih Http Range.
-    //Ranged Video streaming tested with Firefox,Safari,Chrome 
+    // Any regular file or mp4 videos wih Http Range.
+    // Ranged Video streaming tested with Firefox,Safari,Chrome
     case req @ GET -> Root / StringVar(file) =>
       val FOLDER_PATH = "web_root/"
       val FILE = s"$file"
@@ -135,7 +135,7 @@ object MyApp extends IOApp {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
 
       ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 32000, ctx) // , incomingWinSize = 1000000)
+      exitCode <- new QuartzH2Server("localhost", 8443, 32000, Some(ctx)) // , incomingWinSize = 1000000)
         .startIO(R, filter, sync = false)
 
     } yield (exitCode)

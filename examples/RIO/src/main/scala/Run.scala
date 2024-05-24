@@ -40,7 +40,7 @@ object MyApp extends IOApp {
 
   val RR: HttpRouteRIO[Resource1] = { case req @ GET -> Root / "tick" =>
     for { // ReaderT monad
-      value <- RIO(45) //ReaderT effect, look at the RIO object
+      value <- RIO(45) // ReaderT effect, look at the RIO object
       envResource <- ReaderT.ask[IO, Resource1]
       tick <- RIO.liftIO(envResource.tick)
       r <- RIO(Response.Ok().asText(tick + " tid=" + req.headers.get("test_tid").getOrElse("Missing header: test_tid")))
@@ -58,7 +58,7 @@ object MyApp extends IOApp {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
 
       exitCode <- r.use(env =>
-        new QuartzH2Server("localhost", 8443, 60000, ctx)
+        new QuartzH2Server("localhost", 8443, 60000, Some(ctx))
           .startRIO(env, RR, filter, sync = false)
       )
 
