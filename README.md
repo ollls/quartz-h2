@@ -1,47 +1,24 @@
 
 <img src="quartz-h2.jpeg" width="84" title="quartz-h2"/>
 
-[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.7-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.7/)
+[![Generic badge](https://img.shields.io/badge/quartz--h2-v0.5.1-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.5.1/)
 [![Generic badge](https://img.shields.io/badge/Hello%20World-template-red)](https://github.com/ollls/json-template-qh2)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)<br>
-
-# Quick start
-#### 1. Running server with git clone on the code base.
-* Partial func based route: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
-* Tapir endpoints routes:  https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala
-```
-git clone https://github.com/ollls/quartz-h2.git
-sbt IO/run
-sbt TAPIR/run (Try: https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged video streams with Tapir)
-sbt RIO/run
-```
-#### 2. To run "Hello World Template" (json-template-qh2) in docker use:
+To run "Hello World Template" (json-template-qh2) in docker use:
 ```
 sbt assembly
 docker build -t name:Dockerfile . 
 docker run -p 8443:8443 -t name:Dockerfile
 ```
 
-To see tapir based routing example in json-template-qh2
-```
-git checkout tapir
-```
-
-#### 3. One more example/template: https://github.com/ollls/quartz-h2-gptapi
-
-#### 4. Server configuration guide/document is coming.
+One more example/template: https://github.com/ollls/quartz-h2-gptapi
 
 # Asynchronous Java NIO **http/2 TLS** packet streaming server/client.
-
-Quartz-HTTP2 now supports Tapir server interpreter from https://tapir.softwaremill.com
-```
-"io.github.ollls" %% "tapir-quartz-h2" % "0.7"
-```
 
 TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(**120K TPS** on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons. <br><br>**Starting from 0.5.1 server supports http/1.1 connections as a fallback when TLS ALPN H2 tag not supported.For non TLS connections it will be a protocol of choice when no H2 upgrade or H2 Prior Knolwedge used**.
 
 ```
-"io.github.ollls" %% "quartz-h2" % "0.7"
+"io.github.ollls" %% "quartz-h2" % "0.5.1"
 ```
 to start server example with IO
 ```
@@ -212,11 +189,6 @@ You should get:
 ```
 Finished in 1.4891 seconds
 94 tests, 93 passed, 1 skipped, 0 failed
-```
-### How to run test cases:
-
-```
-sbt test
 ```
 
 
