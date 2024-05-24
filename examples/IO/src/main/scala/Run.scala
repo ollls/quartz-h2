@@ -34,7 +34,7 @@ object MyApp extends IOApp {
       )
     )
 
-  var HOME_DIR = "web_root/" // last slash is important!
+  var HOME_DIR = "/Users/ostrygun/" // last slash is important!
 
   val R: HttpRouteIO = {
     case req @ GET -> Root / "ldt" =>
@@ -77,7 +77,7 @@ object MyApp extends IOApp {
 
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
-        reqPath <- IO(Path( "web_root/" + req.uri.getPath()))
+        reqPath <- IO(Path(HOME_DIR + req.uri.getPath()))
         _ <- Logger[IO].info(s"Saving: ${reqPath.toString}")
         _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
         // _ <- req.stream.chunks.foreach( bb => IO.sleep( 1000.millis)).compile.drain
@@ -123,7 +123,7 @@ object MyApp extends IOApp {
         fname <- IO(jpath.getName())
       } yield (Response
         .Ok()
-        .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true))
+        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
         .contentType(ContentType.contentTypeFromFileName(fname)))
   }
 

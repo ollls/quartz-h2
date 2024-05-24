@@ -116,9 +116,9 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   private[this] val IN_J_BUFFER = java.nio.ByteBuffer.allocate(TLS_PACKET_SZ * MULTIPLER)
 
   override def sniServerNames(): Option[Array[String]] = {
-    if (sni_hosts.size == 0) None
+    if( sni_hosts.size == 0 ) None
     else Some(sni_hosts.toArray)
-  }
+  }  
 
   private[this] def doHandshakeClient() = {
     // val BUFF_SZ = ssl_engine.engine.getSession().getPacketBufferSize()
@@ -378,7 +378,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
       sniList <- IO(
         Array(sniServerName)
-          .map(new SniName(_))
+          .map(SniName(_))
           .foldLeft(new java.util.ArrayList[SNIServerName]())((list, item) => { list.add(item); list })
       )
       _ <- IO(sslParameters.setServerNames(sniList))
@@ -428,7 +428,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   private class QuartzSNIMatcher extends SNIMatcher(0) {
     // def matches​( serveName: SNIServerName ): Boolean = true
     def matches(name: javax.net.ssl.SNIServerName): Boolean = {
-      sni_hosts.append(new String(name.getEncoded()))
+      sni_hosts.append(String(name.getEncoded()))
       true
     }
   }

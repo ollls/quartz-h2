@@ -35,7 +35,7 @@ object MyApp extends IOApp {
 
   class Resource1 {
     // time tick, epoch time
-    def tick: IO[String] = IO(new Date().getTime().toString())
+    def tick: IO[String] = IO(Date().getTime().toString())
   }
 
   val RR: HttpRouteRIO[Resource1] = { case req @ GET -> Root / "tick" =>
@@ -50,7 +50,7 @@ object MyApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] =
     for {
       r <- IO(
-        Resource.make[IO, Resource1](Logger[IO].info("Init resource OK") >> IO(new Resource1()))(_ =>
+        Resource.make[IO, Resource1](Logger[IO].info("Init resource OK") >> IO(Resource1()))(_ =>
           Logger[IO].info("discard resource OK")
         )
       )

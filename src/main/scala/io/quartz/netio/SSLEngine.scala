@@ -30,12 +30,12 @@ final class SSLEngine(val engine: JSSLEngine) {
   def setNeedClientAuth(use: Boolean) = IO(engine.setNeedClientAuth(use))
 
   def getDelegatedTask() = IO.blocking {
-    var task: Runnable = engine.getDelegatedTask();
-
-    while (task != null) {
-      task.run()
+    var task: Runnable = null
+    while {
       task = engine.getDelegatedTask();
-    }  
+      task != null
+    }
+    do task.run()
   }
 
   def getHandshakeStatus(): IO[SSLEngineResult.HandshakeStatus] =

@@ -25,7 +25,7 @@ case class ClientResponse(
 ) {
   def transferEncoding(): List[String] = headers.getMval("transfer-encoding")
   def body = stream.compile.toVector.map(_.toArray)
-  def bodyAsText = body.map(new String(_))
+  def bodyAsText = body.map(String(_))
 }
 
 object Http2ClientConnection {
@@ -62,7 +62,7 @@ object Http2ClientConnection {
       hSem2 <- Semaphore[IO](1)
       awaitSettings <- Deferred[IO, Boolean]
       settings0 <- Ref[IO].of(
-        new Http2Settings()
+        Http2Settings()
       ) // will be loaded with server data when awaitSettings is completed
       inboundWindow <- Ref[IO].of[Long](incomingWindowSize)
       globalBytesOfPendingInboundData <- Ref[IO].of(0L)
@@ -70,7 +70,7 @@ object Http2ClientConnection {
         65535L
       ) // set in upddateInitialWindowSizeAllStreams
     } yield (
-      new Http2ClientConnection(
+      Http2ClientConnection(
         ch,
         timeOutMs,
         uri,
@@ -151,7 +151,7 @@ class Http2ClientConnection(
       outXFlowSync: Queue[IO, Boolean]
   ) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow, transmitWindow, outXFlowSync)
 
-  val streamTbl = new java.util.concurrent.ConcurrentHashMap[Int, Http2ClientStream](100).asScala
+  val streamTbl = java.util.concurrent.ConcurrentHashMap[Int, Http2ClientStream](100).asScala
 
   def getStream(id: Int): Option[Http2StreamCommon] = streamTbl.get(id)
 
@@ -165,7 +165,7 @@ class Http2ClientConnection(
       65535L
     ) // set in upddateInitialWindowSizeAllStreams
     xFlowSync <- Queue.unbounded[IO, Boolean]
-  } yield (new Http2ClientStream(
+  } yield (Http2ClientStream(
     streamId,
     d,
     header,
@@ -361,7 +361,7 @@ class Http2ClientConnection(
     _ <- inBoundWorker(ch, timeOutMs).start // init incoming packet reader
     _ <- ch.write(Constants.getPrefaceBuffer())
 
-    s <- IO(new Http2Settings()).flatTap(s => IO { s.INITIAL_WINDOW_SIZE = INITIAL_WINDOW_SIZE })
+    s <- IO(Http2Settings()).flatTap(s => IO { s.INITIAL_WINDOW_SIZE = INITIAL_WINDOW_SIZE })
 
     _ <- sendFrame(Frames.makeSettingsFrameClient(ack = false, s))
 

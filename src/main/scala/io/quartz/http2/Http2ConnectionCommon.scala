@@ -13,7 +13,7 @@ import cats.implicits._
 
 case class QH2InterruptException() extends Throwable
 
-abstract class Http2ConnectionCommon(
+trait Http2ConnectionCommon(
     val INITIAL_WINDOW_SIZE: Int,
     val globalBytesOfPendingInboundData: Ref[IO, Long],
     val globalInboundWindow: Ref[IO, Long],

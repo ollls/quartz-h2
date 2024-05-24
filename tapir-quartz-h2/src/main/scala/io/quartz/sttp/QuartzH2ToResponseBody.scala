@@ -14,6 +14,11 @@ import io.quartz.websocket.{WebSocketFrame => QuartzH2WebSocketFrame}
 import java.io.InputStream
 import java.nio.charset.Charset
 
+type QuartzH2ResponseBody = Either[
+  IO[Pipe[IO, QuartzH2WebSocketFrame, QuartzH2WebSocketFrame]],
+  (fs2.Stream[IO, Byte], Option[String])
+]
+
 class QuartzH2ToResponseBody(serverOptions: QuartzH2ServerOptions[IO])
     extends ToResponseBody[QuartzH2ResponseBody, Fs2IOStreams] {
 
