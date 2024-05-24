@@ -51,7 +51,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("Parallel streams with GET") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
 
       fib <- (server.startIO(R, sync = false)).start
 
@@ -72,7 +72,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("proper 404 handling while sending data") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
       fib <- (server.startIO(R, sync = false)).start
       _ <- IO.sleep(1000.millis)
       c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
@@ -93,7 +93,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("Parallel streams with POST") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, ctx))
+      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
       fib <- (server.startIO(R, sync = false)).start
       _ <- IO.sleep(1000.millis)
       c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
