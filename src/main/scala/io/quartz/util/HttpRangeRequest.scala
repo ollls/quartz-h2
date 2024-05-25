@@ -6,19 +6,24 @@ import fs2.Stream
 import io.quartz.http2.model.{Headers, Method, StatusCode, ContentType, Response, Request}
 
 object HttpRangeRequest {
-  def makeResponse(req: Request, file: java.io.File, BLOCK_SIZE: Int = 32000): Response = {
+  def makeResponse(req: Request, file: java.io.File, rangedType: ContentType, BLOCK_SIZE: Int = 32000): Response = {
     val Hdr_Range: Option[Array[String]] =
       req.headers.get("range").map(range => (range.split("=")(1))).map(_.split("-"))
     val jstream = new java.io.FileInputStream(file)
 
     Hdr_Range match {
       case None =>
-        Response
-          .Ok()
-          .hdr("Accept-Ranges", "bytes")
-          //only 200 with "Accept-Ranges",no data
-          .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
-          .contentType(ContentType.contentTypeFromFileName(file.getName))
+        val fileContentType = ContentType.contentTypeFromFileName(file.getName)
+        if (fileContentType != rangedType)
+          Response
+            .Ok()
+            .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true))
+            .contentType(ContentType.contentTypeFromFileName(file.getName))
+        else
+          Response
+            .Ok()
+            .hdr("Accept-Ranges", "bytes")
+            .contentType(ContentType.contentTypeFromFileName(file.getName))
 
       case Some(minmax: Array[String]) =>
         val minmax =
@@ -27,7 +32,7 @@ object HttpRangeRequest {
         jstream.getChannel().position(minmax._1.toLong)
         Response
           .Error(StatusCode.PartialContent)
-          .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true).take(minmax._2))
+          .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true).take(minmax._2))
           .hdr("Content-Range", s"bytes ${minmax._1}-${minmax._2}/${file.length()}")
           .contentType(ContentType.contentTypeFromFileName(file.getName))
     }

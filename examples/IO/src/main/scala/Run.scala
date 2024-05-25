@@ -109,7 +109,7 @@ object MyApp extends IOApp {
       val BLOCK_SIZE = 32000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-      } yield (HttpRangeRequest.makeResponse(req, jpath, BLOCK_SIZE))
+      } yield (HttpRangeRequest.makeResponse(req, jpath, ContentType.Video_MP4, BLOCK_SIZE))
 
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
