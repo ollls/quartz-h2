@@ -77,7 +77,7 @@ object MyApp extends IOApp {
 
     case req @ POST -> Root / "upload" / StringVar(_) =>
       for {
-        reqPath <- IO(Path( "web_root/" + req.uri.getPath()))
+        reqPath <- IO(Path("web_root/" + req.uri.getPath()))
         _ <- Logger[IO].info(s"Saving: ${reqPath.toString}")
         _ <- req.stream.through(Files[IO].writeAll(reqPath)).compile.drain
         // _ <- req.stream.chunks.foreach( bb => IO.sleep( 1000.millis)).compile.drain
@@ -109,7 +109,7 @@ object MyApp extends IOApp {
       val BLOCK_SIZE = 32000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-      } yield (HttpRangeRequest.makeResponse(req, jpath, BLOCK_SIZE))
+      } yield (HttpRangeRequest.makeResponse(req, jpath, ContentType.Video_MP4, BLOCK_SIZE))
 
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
