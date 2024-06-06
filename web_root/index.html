@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+    <head>
+        <title>FAQ</title>
+        <meta name="description" content="quartz-h2 server tutorial" />
+        <meta name="keywords" content="quartz-h2 server tutorial" />
+    </head>
+    <body>
+        <h1>Quartz-H2 introduction, Q&A</h1>
+        <h4>
+            By default TLS encryption is on, it uses self-signed cert for demo
+            purposes and you need to approve selfsigned cert in the browser. Do
+            we realy need this security out of the box?
+        </h4>
+        The server was written from top to bottom, which means that TLS data
+        found it's way to HTTP/2 frames starting from day 1. Later as PoC we
+        added transparent support (with netio) for plain text HTTP/2 and
+        HTTP/1.1 with chunked encoding only. Modern browsers are simply not
+        aware that HTTP/2 plain text exists. However Quartz-H2 supports plain
+        h2c protocol as well.
+        <h4>Server has sync and async mode, what's the difference?</h4>
+        Async mode is Java NIO async callback wraped up into IO.async along with
+        TLS encryption done as IO effects. Thanks to netio ransparency, you can
+        select any mode with SSL or without.
+        <br />Sync mode is just tradional Java sockets on CATS Effect's blocking
+        pool.
+        <h4>
+            Server works with fs2 streams, how do I know the Content-Length?
+        </h4>
+        Content-Length is optional for http/2 protocol. In fall back mode with
+        http/1.1 chunked encoding is always used. Your fs2 streams are always
+        good and ready to be evaluated as long as you need them to. Below,
+        example of Response for file streaming with fs2.
+        <div>
+            <code>
+                Response.Ok().asStream(fs2.io.readInputStream(IO(jstream),
+                BLOCK_SIZE,
+                true)).contentType(ContentType.contentTypeFromFileName(fname)))
+            </code>
+        </div>
+        <h4>Server software written in Cats Effect why you don't use F[_]</h4>
+        The server is written directly for cats.IO, which implements all
+        necessary type classes. The background of the server's design has its
+        roots in the ZIO library. The latest Cats Effect library does everything
+        that ZIO 1.0 used to do, but faster. We all miss the lightness and speed
+        of ZIO 1.0. Luckily, Cats Effect 3.0 was the perfect answer. We aren't
+        entirely against the idea of converting code to F[_] style in a separate
+        codebase, time will tell whether it is worthwhile.
+        <h4>
+            Does it support Tapir, an HTTP API definition library from
+            SoftwareMill
+        </h4>
+        Yes, it does. Yet supports more complex cases as well, such as http
+        multipart, http ranged, and websockets. You will need tapir server
+        interpreter provided as separate jar tapir-quartz-h2.jar
+    </body>
+</html>
