@@ -7,6 +7,22 @@
     </head>
     <body>
         <h1>Quartz-H2 introduction, Q&A</h1>
+        <h4>Why should I try qh2 server?</h4>
+        It offers first class support for h2 and h2c protocols. H2 binary
+        package exchange fits nicely into functional effectful stream concept.
+        You just evaluate your stream description into packets as soon as they
+        go. Cats effect library offers blazingly fast green thread (fiber)
+        support. Given the multiplexing nature of H2 protocol, which can process
+        several virtual stream in one connection, it was natural to adopt one
+        CATS effect fiber per H2 stream approach. It efficiently process several
+        files per one connection. Thanks to H2 and Cats Effect thread to fibers
+        management. Also, it properly implements H2 flow control, so if one of
+        your fs2 stream sinks slows down, your h2 transmit window update will be
+        delayed accordingly.
+        <h4>What is h2 and h2c</h4>
+        h2 means http/2 protocol with TLS encryption, this is the one which all
+        modern browsers support. h2c is plain text unencrypted http/2, can be
+        used with third party clients but not with browsers.
         <h4>
             By default TLS encryption is on, it uses self-signed cert for demo
             purposes and you need to approve selfsigned cert in the browser. Do
@@ -17,10 +33,12 @@
         added transparent support (with netio) for plain text HTTP/2 and
         HTTP/1.1 with chunked encoding only. Modern browsers are simply not
         aware that HTTP/2 plain text exists. However Quartz-H2 supports plain
-        h2c protocol as well.
+        h2c protocol as well. QH2 is an implementation of h2 protocol and the
+        rest of modes are just extensions. This is first class HTTP/2 packet
+        streamer and not the extension on top oh http1.
         <h4>Server has sync and async mode, what's the difference?</h4>
         Async mode is Java NIO async callback wraped up into IO.async along with
-        TLS encryption done as IO effects. Thanks to netio ransparency, you can
+        TLS encryption done as IO effects. Thanks to netio transparency, you can
         select any mode with SSL or without.
         <br />Sync mode is just tradional Java sockets on CATS Effect's blocking
         pool.
