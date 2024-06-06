@@ -11,7 +11,7 @@
         It offers first class support for h2 and h2c protocols. H2 binary
         package exchange fits nicely into functional effectful stream concept.
         You just evaluate your stream description into packets as soon as they
-        go. Cats effect library offers blazingly fast green thread (fiber)
+        come. Cats effect library offers blazingly fast green thread (fiber)
         support. Given the multiplexing nature of H2 protocol, which can process
         several virtual stream in one connection, it was natural to adopt one
         CATS effect fiber per H2 stream approach. It efficiently process several
