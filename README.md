@@ -15,6 +15,8 @@ sbt IO/run
 sbt TAPIR/run (Try: https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged video streams with Tapir)
 sbt RIO/run
 ```
+Open https://localhost:8443/doc/index.html in the browser.
+
 #### 2. To run "Hello World Template" (json-template-qh2) in docker use:
 ```
 sbt assembly
