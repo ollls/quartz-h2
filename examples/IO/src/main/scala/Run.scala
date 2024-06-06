@@ -113,8 +113,8 @@ object MyApp extends IOApp {
 
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
-    case req @ GET -> "site" /: _ =>
-      val FOLDER_PATH = HOME_DIR + "web_root/"
+    case req @ GET -> "doc" /: _ =>
+      val FOLDER_PATH = "web_root/"
       val BLOCK_SIZE = 16000
       for {
         reqPath <- IO(req.uri.getPath())
