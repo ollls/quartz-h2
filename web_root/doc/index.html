@@ -11,10 +11,10 @@
         It offers first class support for h2 and h2c protocols. H2 binary
         package exchange fits nicely into functional effectful stream concept.
         You just evaluate your stream description into packets as soon as they
-        go. Cats effect library offers blazingly fast green thread (fiber)
+        come. Cats effect library offers blazingly fast green thread (fiber)
         support. Given the multiplexing nature of H2 protocol, which can process
         several virtual stream in one connection, it was natural to adopt one
-        CATS effect fiber per H2 stream approach. It efficiently process several
+        CATS effect fiber per one H2 stream. It efficiently process several
         files per one connection. Thanks to H2 and Cats Effect thread to fibers
         management. Also, it properly implements H2 flow control, so if one of
         your fs2 stream sinks slows down, your h2 transmit window update will be
@@ -68,8 +68,25 @@
             Does it support Tapir, an HTTP API definition library from
             SoftwareMill
         </h4>
-        Yes, it does. Yet supports more complex cases as well, such as http
+        Yes, it does. QH2 supports more complex cases as well, such as http
         multipart, http ranged, and websockets. You will need tapir server
-        interpreter provided as separate jar tapir-quartz-h2.jar
+        interpreter provided as separate jar tapir-quartz-h2.jar For all the
+        cases related to configuring TAPIR based routes please, refer to TAPIR
+        documentation. Also, you can refer to examples in
+        examples/STTP/src/main/scala/Run.scala
+        <h4>What is a virtual hosting based on TLS SNI host names?</h4>
+        Quartz-H2 can recognize TLS SNI names which are provided as an extension
+        during TLS initial negotoation. There is a special "!" operator, which
+        allow you to match partial function not only with path and method but
+        with SNI name.
+        <code
+            ><br /><br />
+            // virtual hosting with TLS SNI.<br />
+            // example with SniHostName passed as parmeter for "!" operator<br />
+            case "localhost" ! GET -> Root /"example" =><br />
+            &nbsp val ts = Stream.emits("Block1\n".getBytes())<br />
+            &nbsp val ts2 = ts ++ Stream.emits("Block22\n".getBytes())<br />
+            &nbsp IO(Response.Ok().asStream(ts2))<br />
+        </code>
     </body>
 </html>
