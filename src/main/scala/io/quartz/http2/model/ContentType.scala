@@ -46,6 +46,7 @@ object ContentType {
   val Font_WOFF2 = ContentType("font/woff2")
   val Application_PDF = ContentType("application/pdf")
   val Video_MP4 = ContentType("video/mp4")
+  val GRPC = ContentType("application/grpc")
 
   def contentTypeFromFileName(fileName: String) = {
     val exts = fileName.split("\\.")

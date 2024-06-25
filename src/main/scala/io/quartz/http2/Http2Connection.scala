@@ -211,8 +211,7 @@ class Http2Stream(
     bytesOfPendingInboundData: Ref[IO, Long], // metric
     inboundWindow: Ref[IO, Long],
     val contentLenFromHeader: Deferred[IO, Option[Int]],
-    val trailingHeader: Deferred[IO, Headers],
-    val done: Deferred[IO, Unit]
+    val trailingHeader: Deferred[IO, Headers]
 ) extends Http2StreamCommon(bytesOfPendingInboundData, inboundWindow, transmitWindow, outXFlowSync) {
   var endFlag = false // half-closed if true
   var endHeadersFlag = false
@@ -398,7 +397,7 @@ class Http2Connection(
       header <- IO(ArrayBuffer.empty[ByteBuffer])
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
-      //dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
+      // dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
       xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
@@ -422,8 +421,7 @@ class Http2Connection(
           pendingInBytes,
           inboundWindow = localInboundWindowSize,
           contentLenFromHeader,
-          trailingHdr,
-          done
+          trailingHdr
         )
       )
 
@@ -458,7 +456,7 @@ class Http2Connection(
       header <- IO(ArrayBuffer.empty[ByteBuffer])
       trailing_header <- IO(ArrayBuffer.empty[ByteBuffer])
 
-      //dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
+      // dataOut <- Queue.bounded[IO, ByteBuffer](1) // up to MAX_CONCURRENT_STREAMS users
       xFlowSync <- Queue.unbounded[IO, Boolean]
       dataIn <- Queue.unbounded[IO, ByteBuffer]
       transmitWindow <- Ref[IO].of[Long](settings_client.INITIAL_WINDOW_SIZE)
@@ -488,8 +486,7 @@ class Http2Connection(
           pendingInBytes,
           inboundWindow = localInboundWindowSize,
           contentLenFromHeader,
-          trailingHdr,
-          done
+          trailingHdr
         )
       )
 
@@ -743,12 +740,29 @@ class Http2Connection(
               .whenA(endStreamInHeaders == false)
 
             lastChunk <- pref.get
-            _ <- dataFrame(settings, streamId, true, lastChunk.toByteBuffer)
-              .traverse(b => sendDataFrame(streamId, b))
-              .whenA(endStreamInHeaders == false)
-              .void
 
-            _ <- updateStreamWith(10, streamId, c => c.done.complete(()).void).whenA(endStreamInHeaders == true)
+            _ <- response.trailers match {
+              case Some(trailers) =>
+                Logger[IO].trace("trailers: " + trailers.printHeaders(" | ")) *>
+                  dataFrame(settings, streamId, endStream = false, lastChunk.toByteBuffer)
+                    .traverse(b => sendDataFrame(streamId, b))
+                    .whenA(endStreamInHeaders == false)
+                    .void *>
+                  headerFrame(
+                    streamId,
+                    settings,
+                    Priority.NoPriority,
+                    endStream = true, // trailer ends stream
+                    headerEncoder,
+                    trailers
+                  ).traverse(b => sendFrame(b))
+              case None =>
+                Logger[IO].trace("trailers: None") *>
+                  dataFrame(settings, streamId, endStream = true, lastChunk.toByteBuffer)
+                    .traverse(b => sendDataFrame(streamId, b))
+                    .whenA(endStreamInHeaders == false)
+                    .void
+            }
 
           } yield ()
 
@@ -764,7 +778,6 @@ class Http2Connection(
               for {
                 bb2 <- IO(headerFrame(streamId, settings, Priority.NoPriority, true, headerEncoder, o44.headers))
                 _ <- bb2.traverse(b => sendFrame(b))
-                _ <- updateStreamWith(10, streamId, c => c.done.complete(()).void)
 
               } yield ()
             }(_ => hSem.release)
@@ -847,11 +860,6 @@ class Http2Connection(
                   .whenA(o_s.isEmpty)
 
                 _ <- markEndOfStream(streamId)
-
-                // _ <- updateStreamWith(100, streamId, c => c.done.complete(()).void).whenA(o_s.isDefined)
-                // _ <- closeStream(streamId).whenA(o_s.isDefined)
-                // just abort wait and go with norlmal close()
-                // _ <- updateStreamWith(78, streamId, c => c.done.complete(()).void).whenA(o_s.isDefined)
               } yield ()
 
             case FrameTypes.HEADERS =>
@@ -889,8 +897,8 @@ class Http2Connection(
                         "stream's Id number is less than previously used Id number"
                       )
                     )
-                    .whenA( streamId <= lastStreamId)
-                  _ <- IO { lastStreamId = streamId }.whenA( streamId != 0 )
+                    .whenA(streamId <= lastStreamId)
+                  _ <- IO { lastStreamId = streamId }.whenA(streamId != 0)
 
                   _ <- priority match {
                     case Some(t3) =>
@@ -999,7 +1007,7 @@ class Http2Connection(
                       "stream's Id number is less than previously used Id number"
                     )
                   )
-                  .whenA( streamId > lastStreamId  )
+                  .whenA(streamId > lastStreamId)
                 _ <- Logger[IO].debug(s"WINDOW_UPDATE $increment $streamId") >> this
                   .updateWindow(streamId, increment)
                   .handleErrorWith[Unit] {
