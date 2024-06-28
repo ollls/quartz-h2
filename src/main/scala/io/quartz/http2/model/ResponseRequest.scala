@@ -141,34 +141,37 @@ sealed case class Response(
     code: StatusCode,
     headers: Headers,
     stream: Stream[IO, Byte] = Stream.empty,
+    trailers: Option[Headers] = None,
     websocket: Option[IO[Pipe[IO, WebSocketFrame, WebSocketFrame]]] = None
 ) {
 
+  def trailers(te: Headers): Response = new Response(this.code, this.headers, this.stream, Some(te))
+
   /** Adds the given headers to the response headers. */
-  def hdr(hdr: Headers): Response = new Response(this.code, this.headers ++ hdr, this.stream)
+  def hdr(hdr: Headers): Response = new Response(this.code, this.headers ++ hdr, this.stream, this.trailers)
 
   /** Adds a single header to the response headers, given as a tuple of (name, value). */
-  def hdr(pair: (String, String)) = new Response(this.code, this.headers + pair, this.stream)
+  def hdr(pair: (String, String)) = new Response(this.code, this.headers + pair, this.stream, this.trailers)
 
   /** Adds a cookie to the response headers. */
   def cookie(cookie: Cookie) = {
     val pair = ("Set-Cookie" -> cookie.toString())
-    new Response(this.code, this.headers + pair, this.stream)
+    new Response(this.code, this.headers + pair, this.stream, this.trailers)
   }
 
   /** Sets the response body to the given `Stream` of bytes. */
   def asStream(s0: Stream[IO, Byte]) =
-    new Response(this.code, this.headers, s0)
+    new Response(this.code, this.headers, s0, this.trailers)
 
   def asWebsocketPipe(pipe: IO[Pipe[IO, WebSocketFrame, WebSocketFrame]]) =
-    new Response(this.code, this.headers, this.stream, Some(pipe))
+    new Response(this.code, this.headers, this.stream, this.trailers, Some(pipe))
 
   /** Sets the response body to the given text string, encoded as bytes. */
-  def asText(text: String) = new Response(this.code, this.headers, Stream.emits(text.getBytes()))
+  def asText(text: String) = new Response(this.code, this.headers, Stream.emits(text.getBytes()), this.trailers)
 
   /** Sets the content type header for the response. */
   def contentType(type0: ContentType): Response =
-    new Response(this.code, this.headers + ("content-type" -> type0.toString()), this.stream)
+    new Response(this.code, this.headers + ("content-type" -> type0.toString()), this.stream, this.trailers)
 
   /** Returns true if the response body is sent using chunked encoding. */
   def isChunked: Boolean = transferEncoding().exists(_.equalsIgnoreCase("chunked"))
@@ -178,5 +181,10 @@ sealed case class Response(
 
   /** Sets the transfer encoding header for the response. */
   def transferEncoding(vals0: String*): Response =
-    new Response(this.code, vals0.foldLeft(this.headers)((h, v) => h + ("transfer-encoding" -> v)), this.stream)
+    new Response(
+      this.code,
+      vals0.foldLeft(this.headers)((h, v) => h + ("transfer-encoding" -> v)),
+      this.stream,
+      this.trailers
+    )
 }

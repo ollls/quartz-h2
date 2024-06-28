@@ -29,7 +29,7 @@ trait QuartzH2ServerInterpreter {
     val hdrs1 = hdrs + (":status", code.toString())
 
     r.body match {
-      case Some(Left(pipeF)) => Response(code, hdrs1, Stream.empty, Some(pipeF))
+      case Some(Left(pipeF)) => Response(code, hdrs1, Stream.empty, None, Some(pipeF))
       case Some(Right((stream: fs2.Stream[IO, Byte], Some(boundary)))) => {
         val new_content_type =
           r.contentType.flatMap(ct => if (ct.startsWith("multipart")) Some(ct + "; boundary=" + boundary) else None)
