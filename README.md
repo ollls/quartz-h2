@@ -6,7 +6,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)<br>
 
 #####
-On going activity: Succesfull PoC with GRPC where QH2 is used as http/2 transport( without Netty ).
+On going activity: Succesfull PoC with sbt-fs2-grpc where QH2 is used as http/2 transport( without Netty ).
 Supports REST style POST and automated traversal over Service Definition.
 
 # Quick start
