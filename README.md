@@ -6,7 +6,10 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ollls_quartz-h2&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ollls_quartz-h2)<br>
 
 # Quick start
-#### 1. Running server with git clone on the code base.
+#### Running server with git clone on the code base.
+Open https://localhost:8443/doc/index.html in the browser.
+https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged http video streams with TAPIR/run)
+
 * Partial func based route: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala
 * Tapir endpoints routes:  https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala
 ```
@@ -15,12 +18,12 @@ sbt IO/run
 sbt TAPIR/run
 sbt RIO/run
 ```
-Open https://localhost:8443/doc/index.html in the browser.
-https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged http video streams with TAPIR/run)
 
-#### 2. https://github.com/ollls/json-template-qh2
-#### 3. https://github.com/ollls/qh2_tapir_template
-#### 4. https://github.com/ollls/quartz-h2-gptapi
+
+#### https://github.com/ollls/json-template-qh2
+#### https://github.com/ollls/qh2_tapir_template
+#### https://github.com/ollls/quartz-h2-gptapi
+#### https://github.com/ollls/qh2_grpc
 
 # Asynchronous Java NIO **http/2 TLS** packet streaming server/client.
 
