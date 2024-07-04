@@ -12,10 +12,11 @@
 ```
 git clone https://github.com/ollls/quartz-h2.git
 sbt IO/run
-sbt TAPIR/run (Try: https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged video streams with Tapir)
+sbt TAPIR/run
 sbt RIO/run
 ```
 Open https://localhost:8443/doc/index.html in the browser.
+https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged http video streams with TAPIR/run)
 
 #### 2. https://github.com/ollls/json-template-qh2
 #### 3. https://github.com/ollls/qh2_tapir_template
