@@ -17,12 +17,7 @@ sbt RIO/run
 ```
 Open https://localhost:8443/doc/index.html in the browser.
 
-#### 2. To run "Hello World Template" (json-template-qh2) in docker use:
-```
-sbt assembly
-docker build -t name:Dockerfile . 
-docker run -p 8443:8443 -t name:Dockerfile
-```
+#### 2. https://github.com/ollls/json-template-qh2
 #### 3. https://github.com/ollls/qh2_tapir_template
 #### 4. https://github.com/ollls/quartz-h2-gptapi
 
