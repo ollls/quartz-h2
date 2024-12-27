@@ -21,7 +21,7 @@ Open https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged 
 * Tapir endpoints routes:  https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala
 
 #### https://github.com/ollls/json-template-qh2
-#### https://github.com/ollls/qh2_tapir_template
+#### https://github.com/ollls/qh2_tapir_template ( check "with-swagger" for OpenAPI's tapir-swagger )
 #### https://github.com/ollls/quartz-h2-gptapi
 #### https://github.com/ollls/qh2_grpc
 
