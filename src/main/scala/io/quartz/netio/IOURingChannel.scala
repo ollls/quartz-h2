@@ -80,6 +80,43 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     )
   }
 
+  def effectAsyncChannelIO[A](ring: IoUring, ch: IoUringSocket)(
+      op: (ring: IoUring, ch: IoUringSocket) => (A => Unit) => IO[Any]
+  ) = {
+    IO.async[A](cb =>
+      IO(op(ring, ch)).flatMap(handler => {
+        val f1: A => Unit = bb => { cb(Right(bb)) }
+        // todo: investigate how to catch error
+        handler(f1) *> IO(Some(IO.unit))
+      })
+    )
+  }
+
+  private def ioUringReadIO(
+      ring: IoUring,
+      ch: IoUringSocket,
+      bufferDirect: ByteBuffer,
+      cb: ByteBuffer => Unit
+  ): IO[Unit] = {
+
+    for {
+      consumer <-
+        IO(new Consumer[ByteBuffer] {
+          override def accept(buffer: ByteBuffer): Unit = {
+            cb(buffer)
+          }
+        })
+      // associate a completion handler with a channel, just a variable assignment.
+      _ <- IO(ch.onRead(consumer))
+      // queue up asyncronous read operation
+      _ <- IO(ring.queueRead(ch, bufferDirect))
+
+      _ <- IO(submitAndGetForRead(ring)).start
+
+    } yield ()
+
+  }
+
   private def ioUringRead(
       ring: IoUring,
       ch: IoUringSocket,
@@ -97,8 +134,30 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     ch.onRead(consumer)
     // queue up asyncronous read operation
     ring.queueRead(ch, bufferDirect)
-    submit(ring)
-    while( getCqes(ring) != true ) {}
+
+    submitAndGetForRead(ring)
+
+  }
+
+  private def ioUringWriteIO(
+      ring: IoUring,
+      ch: IoUringSocket,
+      bufferDirect: ByteBuffer,
+      cb: ByteBuffer => Unit
+  ): IO[Unit] = {
+    for {
+      consumer <- IO(new Consumer[ByteBuffer] {
+        override def accept(buffer: ByteBuffer): Unit = {
+          cb(buffer)
+        }
+      })
+      // associate a completion handler with a channel, just a variable assignment.
+      _ <- IO(ch.onWrite(consumer))
+      // queue up asyncronous read operation
+      _ <- IO(ring.queueWrite(ch, toDirectBuffer(bufferDirect)))
+      _ <- IO(submit(ring))
+      _ <- IO(tryGetCqes(ring)).start
+    } yield ()
   }
 
   private def ioUringWrite(
@@ -119,24 +178,45 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     // queue up asyncronous read operation
     ring.queueWrite(ch, toDirectBuffer(bufferDirect))
     submit(ring)
+    tryGetCqes(ring)
   }
 
-  private def submit( ring : IoUring) = {
+  private def submit(ring: IoUring) = {
     this.synchronized {
       ring.submit()
     }
   }
 
-  private def getCqes(ring: IoUring) : Boolean = {
+  private def submitAndGetForRead(ring: IoUring) = {
+    try {
+      lock.lock()
+      submit(ring)
+      while (ring.getCqes() != true) {}
+    } finally {
+      lock.unlock()
+    }
+  }
+
+
+  private def tryGetCqes(ring: IoUring) = {
+    if (lock.tryLock()) {
       try {
-        lock.lock()
         ring.getCqes()
       } finally {
         lock.unlock()
       }
     }
+  }
 
   def read(timeOut: Int): IO[Chunk[Byte]] = {
+    for {
+      bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
+      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, bb, _))
+      _ <- IO.raiseError(new Exception("read request aborted")).whenA(b1.position == 0)
+    } yield (Chunk.byteBuffer(b1.flip))
+  }
+
+  def read2(timeOut: Int): IO[Chunk[Byte]] = {
     for {
       bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
       b1 <- effectAsyncChannel[ByteBuffer](ring, ch1)((ring, ch1) => ioUringRead(ring, ch1, bb, _))
@@ -146,7 +226,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
 
   def write(buffer: ByteBuffer): IO[Int] = {
     for {
-      b1 <- effectAsyncChannel[ByteBuffer](ring, ch1)((ring, ch1) => ioUringWrite(ring, ch1, buffer, _))
+      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringWriteIO(ring, ch1, buffer, _))
     } yield (b1.position())
   }
 
