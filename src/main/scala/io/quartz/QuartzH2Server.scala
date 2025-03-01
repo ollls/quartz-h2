@@ -592,25 +592,7 @@ class QuartzH2Server(
   import cats.implicits._
   import scala.concurrent.ExecutionContextExecutorService
 
-  /*
-  def mkRing() = {
-    val ring = new IoUring(10000)
-    val ec: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
-    ec.execute(() => ring.loop())
-    (ring, ec)
-  }
-
-  def startRingProcessor(rings: Vector[IoUring]) = {
-    val ec: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
-    ec.execute(() => rings.foreach(_.executeNow()))
-  }
-
-  def mkRingForVector(vRef: Ref[IO, Vector[IoUring]], item: IoUring) = {
-    for {
-      _ <- vRef.update(_ :+ item)
-    } yield (item)
-  }*/
-
+ 
   def run4(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
       _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (nio_uring)")
