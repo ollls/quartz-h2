@@ -592,10 +592,11 @@ class QuartzH2Server(
   import cats.implicits._
   import scala.concurrent.ExecutionContextExecutorService
 
- 
   def run4(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
-      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (nio_uring)")
+      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (netio/iouring)")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
       rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
 
@@ -612,7 +613,7 @@ class QuartzH2Server(
         (ring, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
-        _ <- IO(IOURingChannel(new IoUring(4096), socket))
+        _ <- IO(IOURingChannel(new IoUring(4096), socket, keepAliveMs))
           .flatMap(ch =>
             IO(ch)
               .bracket(ch =>

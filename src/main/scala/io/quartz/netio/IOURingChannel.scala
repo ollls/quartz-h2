@@ -41,7 +41,7 @@ object IOURingChannel {
 
 }
 
-class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChannel {
+class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: Long) extends IOChannel {
 
   val lock = new ReentrantLock()
 
@@ -111,7 +111,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
       // queue up asyncronous read operation
       _ <- IO(ring.queueRead(ch, bufferDirect))
 
-      _ <- IO(submitAndGetForRead(ring)).start
+      result <- IO(submitAndGetForRead(ring, timeOutMs)).start
 
     } yield ()
 
@@ -135,7 +135,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     // queue up asyncronous read operation
     ring.queueRead(ch, bufferDirect)
 
-    submitAndGetForRead(ring)
+    submitAndGetForRead(ring, timeOutMs)
 
   }
 
@@ -156,7 +156,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
       // queue up asyncronous read operation
       _ <- IO(ring.queueWrite(ch, toDirectBuffer(bufferDirect)))
       _ <- IO(submit(ring))
-      _ <- IO(tryGetCqes(ring)).start
+      _ <- IO(tryGetCqes(ring, timeOutMs)).start
     } yield ()
   }
 
@@ -178,7 +178,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     // queue up asyncronous read operation
     ring.queueWrite(ch, toDirectBuffer(bufferDirect))
     submit(ring)
-    tryGetCqes(ring)
+    tryGetCqes(ring, timeOutMs)
   }
 
   private def submit(ring: IoUring) = {
@@ -187,39 +187,39 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket) extends IOChanne
     }
   }
 
-  private def submitAndGetForRead(ring: IoUring) = {
+  private def submitAndGetForRead(ring: IoUring, timeOutMs: Long) : Int = {
     try {
       lock.lock()
       submit(ring)
-      while (ring.getCqes() != true) {}
+      var ret = 0
+
+      while {
+        ret = ring.getCqes(timeOutMs)
+        ret == 0
+      } do ()
+
+      ret     
+
     } finally {
       lock.unlock()
     }
   }
 
-
-  private def tryGetCqes(ring: IoUring) = {
+  private def tryGetCqes(ring: IoUring, timeOutMs: Long) = {
     if (lock.tryLock()) {
       try {
-        ring.getCqes()
+        ring.getCqes(timeOutMs)
       } finally {
         lock.unlock()
       }
     }
   }
 
-  def read(timeOut: Int): IO[Chunk[Byte]] = {
+  def read(timeOutMs: Int): IO[Chunk[Byte]] = {
     for {
+      _ <- IO(this.timeOutMs = timeOutMs)
       bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
       b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, bb, _))
-      _ <- IO.raiseError(new Exception("read request aborted")).whenA(b1.position == 0)
-    } yield (Chunk.byteBuffer(b1.flip))
-  }
-
-  def read2(timeOut: Int): IO[Chunk[Byte]] = {
-    for {
-      bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
-      b1 <- effectAsyncChannel[ByteBuffer](ring, ch1)((ring, ch1) => ioUringRead(ring, ch1, bb, _))
       _ <- IO.raiseError(new Exception("read request aborted")).whenA(b1.position == 0)
     } yield (Chunk.byteBuffer(b1.flip))
   }
