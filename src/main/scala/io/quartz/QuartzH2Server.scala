@@ -46,6 +46,7 @@ import scala.concurrent.ExecutionContext
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ForkJoinPool._
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.TimeUnit
 
 case class HeaderSizeLimitExceeded(msg: String) extends Exception(msg)
 case class BadProtocol(ch: IOChannel, msg: String) extends Exception(msg)
@@ -415,16 +416,21 @@ class QuartzH2Server(
       // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
 
+      /*
       if (sslCtx.isDefined)
         run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
       else
-        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)*/
+
+      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+
     } else {
       // Loom test commented out, just FYI
       // val e = Executors.newVirtualThreadPerTaskExecutor()
       // val ec = ExecutionContext.fromExecutor(e)
       run1(R, h2streams, h2IdleTimeOutMs)
     }
+
   }
 
   private def printSniName(names: Option[Array[String]]) = {
@@ -577,6 +583,72 @@ class QuartzH2Server(
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
+  }
+
+  import sh.blake.niouring.{IoUringServerSocket, IoUring}
+  import io.quartz.netio.IOURingChannel
+  import sh.blake.niouring.util.NativeLibraryLoader
+  import java.util.concurrent.Executors
+  import cats.implicits._
+  import scala.concurrent.ExecutionContextExecutorService
+
+  /*
+  def mkRing() = {
+    val ring = new IoUring(10000)
+    val ec: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
+    ec.execute(() => ring.loop())
+    (ring, ec)
+  }
+
+  def startRingProcessor(rings: Vector[IoUring]) = {
+    val ec: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
+    ec.execute(() => rings.foreach(_.executeNow()))
+  }
+
+  def mkRingForVector(vRef: Ref[IO, Vector[IoUring]], item: IoUring) = {
+    for {
+      _ <- vRef.update(_ :+ item)
+    } yield (item)
+  }*/
+
+  def run4(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+    for {
+      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (nio_uring)")
+
+      rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
+
+      conId <- Ref[IO].of(0L)
+
+      serverSocket <- IO(new IoUringServerSocket(8080))
+
+      _ <- Logger[IO].info(s"Listens: 8080")
+
+      acceptURing <- IO(new IoUring(512))
+
+      loop = for {
+        a <- IOURingChannel.accept(acceptURing, serverSocket)
+        (ring, socket) = a
+        _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
+
+        _ <- IO(IOURingChannel(new IoUring(4096), socket))
+          .flatMap(ch =>
+            IO(ch)
+              .bracket(ch =>
+                doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                  errorHandler(e)
+                })
+              )(c => { IO.println("CLOSE") *> c.close() *> IO(c.ring.close()) })
+              .start
+          )
+      } yield ()
+
+      _ <- loop.iterateUntil(_ => shutdownFlag)
+
+      _ <- IO(serverSocket.close())
+      _ <- Logger[IO].info("graceful server shutdown")
+
+    } yield (ExitCode.Success)
+
   }
 
 }
