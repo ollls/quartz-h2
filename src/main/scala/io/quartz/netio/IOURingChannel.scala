@@ -6,7 +6,7 @@ import java.util.function.{Consumer, BiConsumer}
 import java.nio.ByteBuffer
 import cats.effect.IO
 import fs2.Chunk
-import sh.blake.niouring.{IoUringServerSocket, IoUringSocket, IoUring}
+import io.quartz.iouring.{IoUringServerSocket, IoUringSocket, IoUring}
 import scala.concurrent.ExecutionContextExecutorService
 import cats.implicits._
 

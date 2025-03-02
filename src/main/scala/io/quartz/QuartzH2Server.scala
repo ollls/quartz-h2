@@ -342,6 +342,9 @@ class QuartzH2Server(
   def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
     start(Routes.of(pf, filter), sync)
 
+  def iouring_startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0))): IO[ExitCode] =
+    startIoUring(Routes.of(pf, filter))
+
   /** Starts an HTTP server that handles requests based on the given routing function, using the `RIO` monad to handle
     * computations that depend on the environment `Env`.
     * @param env
@@ -398,6 +401,29 @@ class QuartzH2Server(
       run3(executor, R, numOfCores, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
+  def startIoUring(R: HttpRoute): IO[ExitCode] = {
+    val cores = Runtime.getRuntime().availableProcessors()
+    val h2streams = cores * 2 // optimal setting tested with h2load
+    // QuartzH2Server.setLoggingLevel( Level.OFF)
+    val fjj = new ForkJoinWorkerThreadFactory {
+      val num = new AtomicInteger();
+      def newThread(pool: ForkJoinPool) = {
+        val thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
+        thread.setDaemon(true);
+        thread.setName("qh2-pool" + "-" + num.getAndIncrement());
+        thread;
+      }
+    }
+    val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
+    // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
+    val ec = ExecutionContext.fromExecutor(e)
+
+    if (sslCtx.isDefined)
+      IO.println("SSL support not implemented") *> IO(ExitCode.Error)
+    else
+      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec) // h2c - iouring, linux
+  }
+
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
@@ -416,13 +442,12 @@ class QuartzH2Server(
       // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
       val ec = ExecutionContext.fromExecutor(e)
 
-      /*
       if (sslCtx.isDefined)
         run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
       else
-        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)*/
+        run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
 
-      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      // run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
 
     } else {
       // Loom test commented out, just FYI
@@ -585,9 +610,10 @@ class QuartzH2Server(
     } yield (ExitCode.Success)
   }
 
-  import sh.blake.niouring.{IoUringServerSocket, IoUring}
+  //import sh.blake.niouring.{IoUringServerSocket, IoUring}
+  import io.quartz.iouring.{IoUringServerSocket, IoUring}
   import io.quartz.netio.IOURingChannel
-  import sh.blake.niouring.util.NativeLibraryLoader
+  //import sh.blake.niouring.util.NativeLibraryLoader
   import java.util.concurrent.Executors
   import cats.implicits._
   import scala.concurrent.ExecutionContextExecutorService
@@ -602,11 +628,11 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      serverSocket <- IO(new IoUringServerSocket(8080))
+      serverSocket <- IO(new IoUringServerSocket(PORT))
 
-      _ <- Logger[IO].info(s"Listens: 8080")
+      _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
 
-      acceptURing <- IO(new IoUring(512))
+      acceptURing <- IO(new IoUring(4096))
 
       loop = for {
         a <- IOURingChannel.accept(acceptURing, serverSocket)
@@ -620,7 +646,7 @@ class QuartzH2Server(
                 doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
                   errorHandler(e)
                 })
-              )(c => { IO.println("CLOSE") *> c.close() *> IO(c.ring.close()) })
+              )(c => { c.close() *> IO(c.ring.close()) })
               .start
           )
       } yield ()
