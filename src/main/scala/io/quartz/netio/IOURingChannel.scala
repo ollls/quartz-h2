@@ -230,7 +230,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
         } else IO.unit
       b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, dst, _))
       n <- IO(b1.position())
-      _ <- IO.raiseWhen(n < 0)(new java.nio.channels.ClosedChannelException)
+      _ <- IO.raiseWhen(n <= 0)(new java.nio.channels.ClosedChannelException)
 
     } yield (n)
   }

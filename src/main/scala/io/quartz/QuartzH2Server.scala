@@ -618,7 +618,7 @@ class QuartzH2Server(
 
   def run4(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
-      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (netio/iouring)")
+      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (netio/linux iouring)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
@@ -637,7 +637,9 @@ class QuartzH2Server(
         (ring, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
-        _ <- IO(IOURingChannel(new IoUring(4096), socket, keepAliveMs))
+        ch <- IO(IOURingChannel(new IoUring(4096), socket, keepAliveMs))
+
+        _ <- IO(ch)
           .flatMap(ch =>
             IO(ch)
               .bracket(ch =>
@@ -647,6 +649,7 @@ class QuartzH2Server(
               )(c => { c.close() *> IO(c.ring.close()) })
               .start
           )
+          .handleErrorWith(errorHandler(_) *> ch.close() *> IO(ring.close()))
       } yield ()
 
       _ <- loop.iterateUntil(_ => shutdownFlag)
@@ -658,10 +661,9 @@ class QuartzH2Server(
 
   }
 
-
   def run5(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
     for {
-      _ <- Logger[IO].error("*****HTTP/2 h2 service: QuartzH2 async mode (netio/iouring)")
+      _ <- Logger[IO].error("HTTP/2 TLS service: QuartzH2 async mode (netio/linux iouring)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
@@ -683,18 +685,20 @@ class QuartzH2Server(
         ring_ch <- IO(new IoUring(4096))
 
         ch <- IO(IOURingChannel(ring_ch, socket, keepAliveMs))
-        
-        _ <- IO(TLSChannel(sslCtx.get, ch)).flatMap(c => c.ssl_init_h2().map((c, _)))
+
+        _ <- IO(TLSChannel(sslCtx.get, ch))
+          .flatMap(c => c.ssl_init_h2().map((c, _)))
           .flatMap(ch =>
             IO(ch)
               .bracket(ch =>
-                doConnect(ch._1, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => {
                   errorHandler(e)
                 })
               )(c => { c._1.close() *> IO(ring_ch.close()) })
               .start
           )
-      } yield ()
+          .handleErrorWith(errorHandler(_) *> ch.close() *> IO(ring_ch.close()))
+      } yield (ring_ch)
 
       _ <- loop.iterateUntil(_ => shutdownFlag)
 
