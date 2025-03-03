@@ -134,8 +134,8 @@ object MyApp extends IOApp {
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF)).whenA(args.find(_ == "--off").isDefined)
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
 
-      //ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8080, 12000, None) //Some(ctx)) // , incomingWinSize = 1000000)
+      ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
+      exitCode <- new QuartzH2Server("localhost", 8080, 12000, Some(ctx)) // , incomingWinSize = 1000000)
         .iouring_startIO(R, filter)
 
     } yield (exitCode)

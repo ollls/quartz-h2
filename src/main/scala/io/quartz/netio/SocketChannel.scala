@@ -40,4 +40,8 @@ class SocketChannel(val socket: Socket) extends IOChannel {
 
   def remoteAddress() = IO(socket.getRemoteSocketAddress())
 
+  /* unimplemented */
+  def readBuffer( dst: ByteBuffer,timeOut: Int): IO[Int] = ???
+  def put(bb: ByteBuffer): IO[Unit] = ???
+
 }

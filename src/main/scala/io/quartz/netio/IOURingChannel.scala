@@ -43,6 +43,10 @@ object IOURingChannel {
 
 class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: Long) extends IOChannel {
 
+  var f_putBack: ByteBuffer = null
+
+  def put(bb: ByteBuffer): IO[Unit] = IO { f_putBack = bb }
+
   val lock = new ReentrantLock()
 
   def toDirectBuffer(buffer: ByteBuffer): ByteBuffer = {
@@ -215,12 +219,28 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
     }
   }
 
+  def readBuffer(
+      dst: ByteBuffer,
+      timeOut: Int
+  ): IO[Int] = {
+    for {
+      _ <-
+        if (f_putBack != null) {
+          IO(dst.put(f_putBack)) >> IO { f_putBack = null }
+        } else IO.unit
+      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, dst, _))
+      n <- IO(b1.position())
+      _ <- IO.raiseWhen(n < 0)(new java.nio.channels.ClosedChannelException)
+
+    } yield (n)
+  }
+
   def read(timeOutMs: Int): IO[Chunk[Byte]] = {
     for {
       _ <- IO(this.timeOutMs = timeOutMs)
       bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
       b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, bb, _))
-      _ <- IO.raiseError(new Exception("read request aborted")).whenA(b1.position == 0)
+      _ <- IO.raiseError(new java.nio.channels.ClosedChannelException).whenA(b1.position == 0)
     } yield (Chunk.byteBuffer(b1.flip))
   }
 

@@ -13,5 +13,6 @@ trait IOChannel {
   //used in TLS mode to pass parameter from SNI tls extension
   def sniServerNames() : Option[Array[String]] = None
   def remoteAddress() : IO[SocketAddress]
-
+  def readBuffer( dst: ByteBuffer,timeOut: Int): IO[Int]
+  def put(bb: ByteBuffer): IO[Unit]
 }

@@ -419,9 +419,9 @@ class QuartzH2Server(
     val ec = ExecutionContext.fromExecutor(e)
 
     if (sslCtx.isDefined)
-      IO.println("SSL support not implemented") *> IO(ExitCode.Error)
+      run5(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
     else
-      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec) // h2c - iouring, linux
+      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
@@ -610,10 +610,8 @@ class QuartzH2Server(
     } yield (ExitCode.Success)
   }
 
-  //import sh.blake.niouring.{IoUringServerSocket, IoUring}
   import io.quartz.iouring.{IoUringServerSocket, IoUring}
   import io.quartz.netio.IOURingChannel
-  //import sh.blake.niouring.util.NativeLibraryLoader
   import java.util.concurrent.Executors
   import cats.implicits._
   import scala.concurrent.ExecutionContextExecutorService
@@ -647,6 +645,53 @@ class QuartzH2Server(
                   errorHandler(e)
                 })
               )(c => { c.close() *> IO(c.ring.close()) })
+              .start
+          )
+      } yield ()
+
+      _ <- loop.iterateUntil(_ => shutdownFlag)
+
+      _ <- IO(serverSocket.close())
+      _ <- Logger[IO].info("graceful server shutdown")
+
+    } yield (ExitCode.Success)
+
+  }
+
+
+  def run5(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+    for {
+      _ <- Logger[IO].error("*****HTTP/2 h2 service: QuartzH2 async mode (netio/iouring)")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
+
+      rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
+
+      conId <- Ref[IO].of(0L)
+
+      serverSocket <- IO(new IoUringServerSocket(PORT))
+
+      _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
+
+      acceptURing <- IO(new IoUring(4096))
+
+      loop = for {
+        a <- IOURingChannel.accept(acceptURing, serverSocket)
+        (ring, socket) = a
+        _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
+
+        ring_ch <- IO(new IoUring(4096))
+
+        ch <- IO(IOURingChannel(ring_ch, socket, keepAliveMs))
+        
+        _ <- IO(TLSChannel(sslCtx.get, ch)).flatMap(c => c.ssl_init_h2().map((c, _)))
+          .flatMap(ch =>
+            IO(ch)
+              .bracket(ch =>
+                doConnect(ch._1, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                  errorHandler(e)
+                })
+              )(c => { c._1.close() *> IO(ring_ch.close()) })
               .start
           )
       } yield ()
