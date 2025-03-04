@@ -622,9 +622,9 @@ class QuartzH2Server(
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
-      rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
-
       conId <- Ref[IO].of(0L)
+
+      rings <- IoUringTbl(1)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 
@@ -637,7 +637,9 @@ class QuartzH2Server(
         (ring, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
-        ch <- IO(IOURingChannel(new IoUring(4096), socket, keepAliveMs))
+        ring <- rings.get
+
+        ch <- IO(IOURingChannel( ring, socket, keepAliveMs))
 
         _ <- IO(ch)
           .flatMap(ch =>
@@ -646,10 +648,10 @@ class QuartzH2Server(
                 doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
                   errorHandler(e)
                 })
-              )(c => { c.close() *> IO(c.ring.close()) })
+              )(ch => { ch.close() *> rings.release(ring) })
               .start
           )
-          .handleErrorWith(errorHandler(_) *> ch.close() *> IO(ring.close()))
+          .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))
       } yield ()
 
       _ <- loop.iterateUntil(_ => shutdownFlag)
@@ -667,9 +669,11 @@ class QuartzH2Server(
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
-      rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
+      // rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
 
       conId <- Ref[IO].of(0L)
+
+      rings <- IoUringTbl(1)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 
@@ -682,9 +686,9 @@ class QuartzH2Server(
         (ring, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
-        ring_ch <- IO(new IoUring(4096))
+        ring <- rings.get
 
-        ch <- IO(IOURingChannel(ring_ch, socket, keepAliveMs))
+        ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
 
         _ <- IO(TLSChannel(sslCtx.get, ch))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
@@ -694,11 +698,11 @@ class QuartzH2Server(
                 doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => {
                   errorHandler(e)
                 })
-              )(c => { c._1.close() *> IO(ring_ch.close()) })
-              .start
+              )(ch => { ch._1.close() *> rings.release(ring) })
+               .start
           )
-          .handleErrorWith(errorHandler(_) *> ch.close() *> IO(ring_ch.close()))
-      } yield (ring_ch)
+          .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))
+      } yield ()
 
       _ <- loop.iterateUntil(_ => shutdownFlag)
 

@@ -41,7 +41,7 @@ object IOURingChannel {
 
 }
 
-class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: Long) extends IOChannel {
+class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOutMs: Long) extends IOChannel {
 
   var f_putBack: ByteBuffer = null
 
@@ -70,22 +70,9 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
     directBuffer;
   }
 
-  def effectAsyncChannel[A](ring: IoUring, ch: IoUringSocket)(
-      op: (ring: IoUring, ch: IoUringSocket) => (A => Unit) => Any
-  ) = {
-    IO.async[A](cb =>
-      IO(op(ring, ch)).flatMap(handler => {
-        val f1: A => Unit = bb => { cb(Right(bb)) }
-        // todo: investigate how to catch error
-        handler(f1)
-        // ^this will call queueRead/Write/etc.
-        IO(Some(IO.unit))
-      })
-    )
-  }
 
-  def effectAsyncChannelIO[A](ring: IoUring, ch: IoUringSocket)(
-      op: (ring: IoUring, ch: IoUringSocket) => (A => Unit) => IO[Any]
+  def effectAsyncChannelIO[A](ring: IoUringEntry, ch: IoUringSocket)(
+      op: (ring: IoUringEntry, ch: IoUringSocket) => (A => Unit) => IO[Any]
   ) = {
     IO.async[A](cb =>
       IO(op(ring, ch)).flatMap(handler => {
@@ -97,7 +84,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
   }
 
   private def ioUringReadIO(
-      ring: IoUring,
+      ring:  IoUringEntry,
       ch: IoUringSocket,
       bufferDirect: ByteBuffer,
       cb: ByteBuffer => Unit
@@ -109,42 +96,14 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
           override def accept(buffer: ByteBuffer): Unit = {
             cb(buffer)
           }
-        })
-      // associate a completion handler with a channel, just a variable assignment.
-      _ <- IO(ch.onRead(consumer))
-      // queue up asyncronous read operation
-      _ <- IO(ring.queueRead(ch, bufferDirect))
-
-      result <- IO(submitAndGetForRead(ring, timeOutMs)).start
-
+        })  
+      _ <- ring.queueRead(consumer, ch, bufferDirect)
     } yield ()
-
   }
 
-  private def ioUringRead(
-      ring: IoUring,
-      ch: IoUringSocket,
-      bufferDirect: ByteBuffer,
-      cb: ByteBuffer => Unit
-  ): Unit = {
-
-    val consumer =
-      new Consumer[ByteBuffer] {
-        override def accept(buffer: ByteBuffer): Unit = {
-          cb(buffer)
-        }
-      }
-    // associate a completion handler with a channel, just a variable assignment.
-    ch.onRead(consumer)
-    // queue up asyncronous read operation
-    ring.queueRead(ch, bufferDirect)
-
-    submitAndGetForRead(ring, timeOutMs)
-
-  }
-
+  
   private def ioUringWriteIO(
-      ring: IoUring,
+      ring: IoUringEntry,
       ch: IoUringSocket,
       bufferDirect: ByteBuffer,
       cb: ByteBuffer => Unit
@@ -155,35 +114,10 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
           cb(buffer)
         }
       })
-      // associate a completion handler with a channel, just a variable assignment.
-      _ <- IO(ch.onWrite(consumer))
-      // queue up asyncronous read operation
-      _ <- IO(ring.queueWrite(ch, toDirectBuffer(bufferDirect)))
-      _ <- IO(submit(ring))
-      _ <- IO(tryGetCqes(ring, timeOutMs)).start
+      _ <- ring.queueWrite(consumer, ch, toDirectBuffer(bufferDirect))
     } yield ()
   }
 
-  private def ioUringWrite(
-      ring: IoUring,
-      ch: IoUringSocket,
-      bufferDirect: ByteBuffer,
-      cb: ByteBuffer => Unit
-  ): Unit = {
-
-    val consumer =
-      new Consumer[ByteBuffer] {
-        override def accept(buffer: ByteBuffer): Unit = {
-          cb(buffer)
-        }
-      }
-    // associate a completion handler with a channel, just a variable assignment.
-    ch.onWrite(consumer)
-    // queue up asyncronous read operation
-    ring.queueWrite(ch, toDirectBuffer(bufferDirect))
-    submit(ring)
-    tryGetCqes(ring, timeOutMs)
-  }
 
   private def submit(ring: IoUring) = {
     this.synchronized {
@@ -191,6 +125,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
     }
   }
 
+  /*
   private def submitAndGetForRead(ring: IoUring, timeOutMs: Long) : Int = {
     try {
       lock.lock()
@@ -217,7 +152,7 @@ class IOURingChannel(val ring: IoUring, val ch1: IoUringSocket, var timeOutMs: L
         lock.unlock()
       }
     }
-  }
+  }*/
 
   def readBuffer(
       dst: ByteBuffer,
