@@ -403,7 +403,9 @@ class QuartzH2Server(
 
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
+    val nrings = cores / 2    //12 cores gives 6 rings - around 15% boost over NIO2
     val h2streams = cores * 2 // optimal setting tested with h2load
+    val THREAD_POOL_SIZE = cores - nrings  
     // QuartzH2Server.setLoggingLevel( Level.OFF)
     val fjj = new ForkJoinWorkerThreadFactory {
       val num = new AtomicInteger();
@@ -414,14 +416,14 @@ class QuartzH2Server(
         thread;
       }
     }
-    val e = new java.util.concurrent.ForkJoinPool(cores, fjj, (t, e) => System.exit(0), false)
+    val e = new java.util.concurrent.ForkJoinPool(THREAD_POOL_SIZE, fjj, (t, e) => System.exit(0), false)
     // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
     val ec = ExecutionContext.fromExecutor(e)
 
     if (sslCtx.isDefined)
-      run5(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      run5(nrings, e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
     else
-      run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+      run4(nrings, e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
@@ -616,7 +618,14 @@ class QuartzH2Server(
   import cats.implicits._
   import scala.concurrent.ExecutionContextExecutorService
 
-  def run4(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+  def run4(
+      nrings: Int,
+      e: ExecutorService,
+      R: HttpRoute,
+      maxThreadNum: Int,
+      maxStreams: Int,
+      keepAliveMs: Int
+  ): IO[ExitCode] = {
     for {
       _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (netio/linux iouring)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
@@ -624,7 +633,7 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      rings <- IoUringTbl(1)
+      rings <- IoUringTbl(nrings)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 
@@ -663,7 +672,14 @@ class QuartzH2Server(
 
   }
 
-  def run5(e: ExecutorService, R: HttpRoute, maxThreadNum: Int, maxStreams: Int, keepAliveMs: Int): IO[ExitCode] = {
+  def run5(
+      nrings: Int,
+      e: ExecutorService,
+      R: HttpRoute,
+      maxThreadNum: Int,
+      maxStreams: Int,
+      keepAliveMs: Int
+  ): IO[ExitCode] = {
     for {
       _ <- Logger[IO].error("HTTP/2 TLS service: QuartzH2 async mode (netio/linux iouring)")
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
@@ -673,7 +689,7 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      rings <- IoUringTbl(6)
+      rings <- IoUringTbl(nrings)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 

@@ -7,8 +7,8 @@ import cats.effect.std.{Mutex, Queue}
 import cats.effect.Ref
 import scala.collection.immutable.List
 import cats.implicits._
-
 import io.quartz.iouring.{IoUring, IoUringSocket}
+
 
 /** IoUringEntry represents an entry in the IoUringTbl. Each entry contains a Mutex for synchronization, a Ref counter
   * to track usage, and the IoUring instance itself.
