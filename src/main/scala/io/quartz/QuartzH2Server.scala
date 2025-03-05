@@ -639,7 +639,7 @@ class QuartzH2Server(
 
         ring <- rings.get
 
-        ch <- IO(IOURingChannel( ring, socket, keepAliveMs))
+        ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
 
         _ <- IO(ch)
           .flatMap(ch =>
@@ -673,7 +673,7 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      rings <- IoUringTbl(1)
+      rings <- IoUringTbl(6)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 
@@ -699,7 +699,7 @@ class QuartzH2Server(
                   errorHandler(e)
                 })
               )(ch => { ch._1.close() *> rings.release(ring) })
-               .start
+              .start
           )
           .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))
       } yield ()

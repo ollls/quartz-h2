@@ -147,7 +147,7 @@ object Http2Connection {
       continue // true if flags has no end stream
     }
 
-    dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array()))
+    dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocateDirect(b.remaining).put(b).array()))
 
   }
 
@@ -590,7 +590,7 @@ class Http2Connection(
       c =>
         for {
           // close data stream, which is stuck without END_STREAM due to addion of trailing header.
-          _ <- c.inDataQ.offer(Frames.mkDataFrame(streamId, true, 0, ByteBuffer.allocate(0)))
+          _ <- c.inDataQ.offer(Frames.mkDataFrame(streamId, true, 0, ByteBuffer.allocateDirect(0)))
           http_headers <- IO(headerDecoder.decodeHeaders(c.trailing_header.toSeq))
           _ <- c.trailingHeader.complete(http_headers)
         } yield ()

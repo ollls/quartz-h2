@@ -130,7 +130,7 @@ object IoUringTbl {
 
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
     def loop: IO[Unit] =
-      IO.blocking(entry.ring.getCqes(30000)) >> loop
+      IO.blocking(entry.ring.getCqes(9000)) >> loop
           .handleError { case _: Throwable =>
             IO.println("Ring shutdown")
           }
@@ -154,7 +154,7 @@ object IoUringTbl {
   def submitProcessor(entry: IoUringEntry): IO[Unit] = {
     def loop: IO[Unit] =
       //IO.println("Waiting for next event...") >>
-        entry.q.take >> IO(entry.ring.submit()) >> loop
+        entry.q.take >> entry.rwqMutex.lock.use( _ => IO(entry.ring.submit())) >> loop
           .handleError { case _: Throwable =>
             IO.println("Queue has been shut down, terminating processor")
           }

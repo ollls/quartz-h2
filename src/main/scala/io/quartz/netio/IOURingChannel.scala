@@ -114,7 +114,7 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
           cb(buffer)
         }
       })
-      _ <- ring.queueWrite(consumer, ch, toDirectBuffer(bufferDirect))
+      _ <- ring.queueWrite(consumer, ch, /*toDirectBuffer(*/bufferDirect)
     } yield ()
   }
 
