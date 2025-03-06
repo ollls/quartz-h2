@@ -403,7 +403,7 @@ class QuartzH2Server(
 
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
-    val nrings = cores / 2    //12 cores gives 6 rings - around 15% boost over NIO2
+    val nrings = cores/2    //12 cores gives 6 rings - around 15% boost over NIO2
     val h2streams = cores * 2 // optimal setting tested with h2load
     val THREAD_POOL_SIZE = cores - nrings  
     // QuartzH2Server.setLoggingLevel( Level.OFF)

@@ -9,7 +9,6 @@ import scala.collection.immutable.List
 import cats.implicits._
 import io.quartz.iouring.{IoUring, IoUringSocket}
 
-
 /** IoUringEntry represents an entry in the IoUringTbl. Each entry contains a Mutex for synchronization, a Ref counter
   * to track usage, and the IoUring instance itself.
   *
@@ -22,8 +21,8 @@ import io.quartz.iouring.{IoUring, IoUringSocket}
   */
 
 case class IoUringEntry(
-    q: Queue[IO, Unit],
-    rwqMutex: Mutex[IO],
+    q: Queue[IO, IO[Unit]],
+    // rwqMutex: Mutex[IO],
     cntr: Ref[IO, Int],
     ring: IoUring
 ) {
@@ -40,13 +39,13 @@ case class IoUringEntry(
     *   IO[Unit]
     */
   def queueRead(consumer: Consumer[ByteBuffer], channel: IoUringSocket, buffer: java.nio.ByteBuffer): IO[Unit] =
-    rwqMutex.lock.use(_ =>
-      for {
-        _ <- IO(channel.onRead(consumer))
-        _ <- IO(ring.queueRead(channel, buffer))
-        _ <- q.offer(())
-      } yield ()
-    )
+    // rwqMutex.lock.use(_ =>
+    for {
+      _ <- IO(channel.onRead(consumer))
+      queueReadIO <- IO(IO(ring.queueRead(channel, buffer)))
+      _ <- q.offer(queueReadIO.void)
+    } yield ()
+  // )
 
   /** Synchronized wrapper for IoUring's queueWrite method.
     *
@@ -60,13 +59,13 @@ case class IoUringEntry(
     *   IO[Unit]
     */
   def queueWrite(consumer: Consumer[ByteBuffer], channel: IoUringSocket, buffer: java.nio.ByteBuffer): IO[Unit] =
-    rwqMutex.lock.use(_ =>
-      for {
-        _ <- IO(channel.onWrite(consumer))
-        _ <- IO(ring.queueWrite(channel, buffer))
-        _ <- q.offer(())
-      } yield ()
-    )
+    // rwqMutex.lock.use(_ =>
+    for {
+      _ <- IO(channel.onWrite(consumer))
+      queueWriteIO <- IO(IO(ring.queueWrite(channel, buffer)))
+      _ <- q.offer(queueWriteIO.void)
+    } yield ()
+  // )
 
 }
 
@@ -130,7 +129,10 @@ object IoUringTbl {
 
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
     def loop: IO[Unit] =
-      IO.blocking(entry.ring.getCqes(9000)) >> loop
+      // entry.rwqMutex.lock.use(
+      IO.blocking(entry.ring.getCqes(9000))
+      // )
+        >> loop
           .handleError { case _: Throwable =>
             IO.println("Ring shutdown")
           }
@@ -152,13 +154,18 @@ object IoUringTbl {
     *   An IO that runs continuously until the queue is shut down
     */
   def submitProcessor(entry: IoUringEntry): IO[Unit] = {
-    def loop: IO[Unit] =
-      //IO.println("Waiting for next event...") >>
-        entry.q.take >> entry.rwqMutex.lock.use( _ => IO(entry.ring.submit())) >> loop
-          .handleError { case _: Throwable =>
-            IO.println("Queue has been shut down, terminating processor")
-          }
-    loop
+
+    def loop: IO[Unit] = {
+      // IO.println("Waiting for next event...") >>
+      (for {
+        queueOpIO <- entry.q.take
+        _ <- queueOpIO *> IO(entry.ring.submit())
+
+      } yield ()) >> loop
+    }
+    loop.handleErrorWith { case _: Throwable =>
+      IO.println("Queue has been shut down, terminating processor")
+    }
   }
 
   /** Create a new IoUringTbl with the specified number of IoUring instances.
@@ -175,10 +182,10 @@ object IoUringTbl {
       .map(_ =>
         for {
           mutex <- Mutex[IO]
-          q <- Queue.bounded[IO, Unit](1024)
+          q <- Queue.bounded[IO, IO[Unit]](1024)
           counter <- Ref.of[IO, Int](0)
           ring <- IO(new IoUring(ringSize))
-        } yield IoUringEntry(q, mutex, counter, ring)
+        } yield IoUringEntry(q, /*mutex,*/ counter, ring)
       )
       .toList
       .sequence
