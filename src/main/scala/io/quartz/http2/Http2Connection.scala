@@ -147,7 +147,7 @@ object Http2Connection {
       continue // true if flags has no end stream
     }
 
-    dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocateDirect(b.remaining).put(b).array()))
+    dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array()))
 
   }
 
