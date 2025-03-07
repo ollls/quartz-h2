@@ -8,7 +8,7 @@ You will need: https://github.com/axboe/liburing.git
 ```
 export LIBURING_PATH=~/Projects/CURRENT/liburing/
 export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-sbt IOURING/run  ( only plain text http/1 and h2c at this moment)
+sbt IOURING/run
 ```
 
 h2load  -D8 -c32  https://localhost:8443/ldt
