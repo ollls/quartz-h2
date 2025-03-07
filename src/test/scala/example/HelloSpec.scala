@@ -18,7 +18,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   override val timeout = 120.second // Default timeout is 10 seconds
 
   val PORT = 11443
-  val FOLDER_PATH = "/Users/ostrygun/web_root/"
+  val FOLDER_PATH = "/home/ols/Projects/CURRENT/quartz-h2/web_root/"
   val BIG_FILE = "img_0278.jpeg"
   val BLOCK_SIZE = 1024 * 14
   val NUMBER_OF_STREAMS = 24
@@ -53,7 +53,10 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
       server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
 
-      fib <- (server.startIO(R, sync = false)).start
+      fib <- (server.startIO(R, sync = false)).start 
+      //uncomment to run on Linux with iouring
+      //fib <- (server.iouring_startIO(R)).start
+      ///////////////////////////////////////////////  
 
       _ <- IO.sleep(1000.millis)
 
