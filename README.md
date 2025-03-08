@@ -18,3 +18,6 @@ h2load -D6 -c32 -m4 http://localhost:8443/mov_bbb.mp4
 ```
 
 Some observations: 30% performance increase compared to NIO2. I assume that if you scale up (add more cores), the difference will increase. However, a regular 12-core CPU will show the most optimal results with 6 rings and 6 threads for a work-stealing pool. These are parameters for a stress test; under real circumstances, 4 rings will likely be a better option since you will experience less I/O and more backend compute.
+
+Entry point IOApp for Linux IoUring, Optional sslContext: Some/None. 
+https://github.com/ollls/quartz-h2/blob/dev4/examples/IOURING/src/main/scala/Run.scala
