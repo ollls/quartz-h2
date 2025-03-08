@@ -22,6 +22,13 @@ object ResponseWriters11 {
     writeFullResponse(ch, response, "", close)
   }
 
+  def wrapDirect( array : Array[Byte]) = {
+    var directBuffer = ByteBuffer.allocateDirect(array.length);
+    directBuffer.put(array);
+    directBuffer.flip();
+    directBuffer;
+}
+
   ////////////////////////////////////////////////////////////////////////////
   def writeFullResponse(
       c: IOChannel,
@@ -29,16 +36,16 @@ object ResponseWriters11 {
       msg: String,
       close: Boolean
   ): IO[Int] =
-    c.write(ByteBuffer.wrap(genResponseFromResponse(rs, msg, close).getBytes()))
+    c.write(wrapDirect(genResponseFromResponse(rs, msg, close).getBytes()))
 
   def writeResponseMethodNotAllowed(c: IOChannel, allow: String): IO[Int] =
-    c.write(ByteBuffer.wrap(genResponseMethodNotAllowed(allow).getBytes()))
+    c.write(wrapDirect(genResponseMethodNotAllowed(allow).getBytes()))
 
   def writeResponseUnsupportedMediaType(c: IOChannel): IO[Int] =
-    c.write(ByteBuffer.wrap(genResponseUnsupportedMediaType().getBytes()))
+    c.write(wrapDirect(genResponseUnsupportedMediaType().getBytes()))
 
   def writeResponseRedirect(c: IOChannel, location: String): IO[Int] =
-    c.write(ByteBuffer.wrap(genResponseRedirect(location).getBytes()))
+    c.write(wrapDirect(genResponseRedirect(location).getBytes()))
 
   /////////////////////////////////////////////////////////////////////////////
   def writeFullResponseFromStreamChunked(
@@ -57,11 +64,14 @@ object ResponseWriters11 {
     val zs = Stream(Chunk.array(("0".toString + CRLF + CRLF).getBytes))
     val res = header ++ s1 ++ zs
 
-    res.foreach { chunk0 =>
-      {
-        c.write(ByteBuffer.wrap(chunk0.toArray)).void
+    res
+      .foreach { chunk0 =>
+        {
+           c.write(wrapDirect(chunk0.toArray)).void
+        }
       }
-    }.compile.drain
+      .compile
+      .drain
   }
 
   ///////////////////////////////////////////////////////////////////////

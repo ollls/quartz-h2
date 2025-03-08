@@ -163,8 +163,8 @@ object IoUringTbl {
 
       } yield ()) >> loop
     }
-    loop.handleErrorWith { case _: Throwable =>
-      IO.println("Queue has been shut down, terminating processor")
+    loop.handleErrorWith { case e: Throwable =>
+      IO.println( s"${e.toString} Queue has been shut down, terminating processor") >> IO( e.printStackTrace() )
     }
   }
 

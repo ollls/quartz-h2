@@ -4,6 +4,7 @@ import cats.effect.{IO, Ref, Deferred, ExitCode}
 
 import fs2.{Stream, Chunk}
 
+import io.quartz.util.ResponseWriters11
 import io.quartz.http2.Http2Connection
 import io.quartz.netio._
 
@@ -291,7 +292,7 @@ class QuartzH2Server(
         else
           for {
             _ <- Logger[IO].trace(("doConnectUpgrade() - h2c upgrade requested"))
-            _ <- ch.write(ByteBuffer.wrap(protoSwitch().getBytes))
+            _ <- ch.write(ResponseWriters11.wrapDirect(protoSwitch().getBytes))
             clientPreface <- ch.read(HTTP1_KEEP_ALIVE_MS)
             bbuf <- IO(clientPreface.toByteBuffer)
             isOK <- IO(Frames.checkPreface(bbuf))
@@ -403,9 +404,9 @@ class QuartzH2Server(
 
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
-    val nrings = cores/2    //12 cores gives 6 rings - around 15% boost over NIO2
+    val nrings = cores / 2 // 12 cores gives 6 rings - around 15% boost over NIO2
     val h2streams = cores * 2 // optimal setting tested with h2load
-    val THREAD_POOL_SIZE = cores - nrings  
+    val THREAD_POOL_SIZE = cores - nrings
     // QuartzH2Server.setLoggingLevel( Level.OFF)
     val fjj = new ForkJoinWorkerThreadFactory {
       val num = new AtomicInteger();
@@ -699,7 +700,7 @@ class QuartzH2Server(
 
       loop = for {
         a <- IOURingChannel.accept(acceptURing, serverSocket)
-        (ring, socket) = a
+        (ring_srv, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
         ring <- rings.get
