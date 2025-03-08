@@ -634,7 +634,7 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      rings <- IoUringTbl(nrings)
+      rings <- IoUringTbl(this, nrings)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 
@@ -690,7 +690,7 @@ class QuartzH2Server(
 
       conId <- Ref[IO].of(0L)
 
-      rings <- IoUringTbl(nrings)
+      rings <- IoUringTbl(this, nrings)
 
       serverSocket <- IO(new IoUringServerSocket(PORT))
 

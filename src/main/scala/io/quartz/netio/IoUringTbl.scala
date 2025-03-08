@@ -8,6 +8,9 @@ import cats.effect.Ref
 import scala.collection.immutable.List
 import cats.implicits._
 import io.quartz.iouring.{IoUring, IoUringSocket}
+import io.quartz.QuartzH2Server
+import org.typelevel.log4cats.Logger
+import io.quartz.MyLogger._
 
 /** IoUringEntry represents an entry in the IoUringTbl. Each entry contains a Mutex for synchronization, a Ref counter
   * to track usage, and the IoUring instance itself.
@@ -127,17 +130,25 @@ class IoUringTbl(entries: List[IoUringEntry]) {
 
 object IoUringTbl {
 
+  @volatile 
+  var shutdown = false
+
+  var server : QuartzH2Server = null
+
+
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
-    def loop: IO[Unit] =
-      // entry.rwqMutex.lock.use(
-      IO.blocking(entry.ring.getCqes(9000))
-      // )
-        >> loop
-          .handleError { case _: Throwable =>
-            IO.println("Ring shutdown")
-          }
-    loop
-  }
+  val processCqes = IO.blocking(entry.ring.getCqes(9000))
+    .handleErrorWith { case _: Throwable =>
+       Logger[IO].error("IoUring: ring shutdown") >> IO( IoUringTbl.shutdown = true ) >> server.shutdown
+    }
+    
+  // Continue until shutdown becomes true
+  processCqes
+    .iterateUntil(_ => IoUringTbl.shutdown)
+    .void
+}
+
+
 
   /** Processes I/O events for a specific IoUringEntry.
     *
@@ -153,20 +164,22 @@ object IoUringTbl {
     * @return
     *   An IO that runs continuously until the queue is shut down
     */
+
   def submitProcessor(entry: IoUringEntry): IO[Unit] = {
-
-    def loop: IO[Unit] = {
-      // IO.println("Waiting for next event...") >>
-      (for {
-        queueOpIO <- entry.q.take
-        _ <- queueOpIO *> IO(entry.ring.submit())
-
-      } yield ()) >> loop
+  val processSubmit = for {
+    queueOpIO <- entry.q.take
+    _ <- queueOpIO *> IO(entry.ring.submit())
+  } yield ()
+  
+  processSubmit
+    .handleErrorWith { case e: Throwable =>
+      Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") >> 
+      //IO(e.printStackTrace()) >>
+      IO(IoUringTbl.shutdown = true) >> server.shutdown
     }
-    loop.handleErrorWith { case e: Throwable =>
-      IO.println( s"${e.toString} Queue has been shut down, terminating processor") >> IO( e.printStackTrace() )
-    }
-  }
+    .iterateUntil(_ => IoUringTbl.shutdown)
+} 
+
 
   /** Create a new IoUringTbl with the specified number of IoUring instances.
     *
@@ -177,7 +190,8 @@ object IoUringTbl {
     * @return
     *   IO containing a new IoUringTbl
     */
-  def apply(count: Int, ringSize: Int = 1024): IO[IoUringTbl] = {
+  def apply( server: QuartzH2Server,  count: Int, ringSize: Int = 1024): IO[IoUringTbl] = {
+    IO( this.server = server) >>
     (0 until count)
       .map(_ =>
         for {
