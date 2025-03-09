@@ -24,8 +24,7 @@ import io.quartz.MyLogger._
   */
 
 case class IoUringEntry(
-    q: Queue[IO, IO[Unit]],
-    // rwqMutex: Mutex[IO],
+    q: Queue[IO, IO[Unit]], // IO[Unit] IO wraped op to execute later.
     cntr: Ref[IO, Int],
     ring: IoUring
 ) {
@@ -126,29 +125,31 @@ class IoUringTbl(entries: List[IoUringEntry]) {
     *   The number of IoUringEntry instances
     */
   def size: Int = entries.size
+
+  def closeIoURings = {
+    IO(entries.foreach(_.ring.close()))
+  }
 }
 
 object IoUringTbl {
 
-  @volatile 
+  @volatile
   var shutdown = false
 
-  var server : QuartzH2Server = null
-
+  var server: QuartzH2Server = null
 
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
-  val processCqes = IO.blocking(entry.ring.getCqes(9000))
-    .handleErrorWith { case _: Throwable =>
-       Logger[IO].error("IoUring: ring shutdown") >> IO( IoUringTbl.shutdown = true ) >> server.shutdown
-    }
-    
-  // Continue until shutdown becomes true
-  processCqes
-    .iterateUntil(_ => IoUringTbl.shutdown)
-    .void
-}
+    val processCqes = IO
+      .blocking(entry.ring.getCqes(9000))
+      .handleErrorWith { case _: Throwable =>
+        Logger[IO].error("IoUring: ring shutdown") >> IO(IoUringTbl.shutdown = true) >> server.shutdown
+      }
 
-
+    // Continue until shutdown becomes true
+    processCqes
+      .iterateUntil(_ => IoUringTbl.shutdown)
+      .void
+  }
 
   /** Processes I/O events for a specific IoUringEntry.
     *
@@ -166,20 +167,19 @@ object IoUringTbl {
     */
 
   def submitProcessor(entry: IoUringEntry): IO[Unit] = {
-  val processSubmit = for {
-    queueOpIO <- entry.q.take
-    _ <- queueOpIO *> IO(entry.ring.submit())
-  } yield ()
-  
-  processSubmit
-    .handleErrorWith { case e: Throwable =>
-      Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") >> 
-      //IO(e.printStackTrace()) >>
-      IO(IoUringTbl.shutdown = true) >> server.shutdown
-    }
-    .iterateUntil(_ => IoUringTbl.shutdown)
-} 
+    val processSubmit = for {
+      queueOpIO <- entry.q.take
+      _ <- queueOpIO *> IO(entry.ring.submit())
+    } yield ()
 
+    processSubmit
+      .handleErrorWith { case e: Throwable =>
+        Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") >>
+          // IO(e.printStackTrace()) >>
+          IO(IoUringTbl.shutdown = true) >> server.shutdown
+      }
+      .iterateUntil(_ => IoUringTbl.shutdown)
+  }
 
   /** Create a new IoUringTbl with the specified number of IoUring instances.
     *
@@ -190,27 +190,27 @@ object IoUringTbl {
     * @return
     *   IO containing a new IoUringTbl
     */
-  def apply( server: QuartzH2Server,  count: Int, ringSize: Int = 1024): IO[IoUringTbl] = {
-    IO( this.server = server) >>
-    (0 until count)
-      .map(_ =>
-        for {
-          mutex <- Mutex[IO]
-          q <- Queue.bounded[IO, IO[Unit]](1024)
-          counter <- Ref.of[IO, Int](0)
-          ring <- IO(new IoUring(ringSize))
-        } yield IoUringEntry(q, /*mutex,*/ counter, ring)
-      )
-      .toList
-      .sequence
-      .flatMap { entries =>
-        val tbl = new IoUringTbl(entries)
-        // Start a processor for each IoUringEntry
-        entries
-          .traverse { entry =>
-            submitProcessor(entry).start >> getCqesProcessor(entry).start
-          }
-          .as(tbl)
-      }
+  def apply(server: QuartzH2Server, count: Int, ringSize: Int = 1024): IO[IoUringTbl] = {
+    IO(this.server = server) >>
+      (0 until count)
+        .map(_ =>
+          for {
+            mutex <- Mutex[IO]
+            q <- Queue.bounded[IO, IO[Unit]](1024)
+            counter <- Ref.of[IO, Int](0)
+            ring <- IO(new IoUring(ringSize))
+          } yield IoUringEntry(q, /*mutex,*/ counter, ring)
+        )
+        .toList
+        .sequence
+        .flatMap { entries =>
+          val tbl = new IoUringTbl(entries)
+          // Start a processor for each IoUringEntry
+          entries
+            .traverse { entry =>
+              submitProcessor(entry).start >> getCqesProcessor(entry).start
+            }
+            .as(tbl)
+        }
   }
 }

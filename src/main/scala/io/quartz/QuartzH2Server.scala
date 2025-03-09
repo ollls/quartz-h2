@@ -667,6 +667,7 @@ class QuartzH2Server(
       _ <- loop.iterateUntil(_ => shutdownFlag)
 
       _ <- IO(serverSocket.close())
+      _ <- rings.closeIoURings
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
@@ -724,6 +725,7 @@ class QuartzH2Server(
       _ <- loop.iterateUntil(_ => shutdownFlag)
 
       _ <- IO(serverSocket.close())
+      _ <- rings.closeIoURings
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
