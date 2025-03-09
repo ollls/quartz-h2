@@ -3,7 +3,7 @@ import Dependencies._
 import scala.sys.process._
 
 ThisBuild / scalaVersion := "3.3.3"
-ThisBuild / version := "0.8.5"
+ThisBuild / version := "0.9-RC"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
 ThisBuild / versionScheme := Some("early-semver")
@@ -18,11 +18,11 @@ ThisBuild / developers := List(
 
 ThisBuild / licenses := List("Apache 2" -> new URI("http://www.apache.org/licenses/LICENSE-2.0.txt").toURL)
 ThisBuild / homepage := Some(url("https://github.com/ollls/quartz-h2"))
-ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
+ThisBuild / credentials += Credentials(new java.io.File("/home/ols/.sbt/.credentials"))
 ThisBuild / credentials += Credentials(
   "GnuPG Key ID",
   "gpg",
-  "F85809244447DB9FA35A3C9B1EB44A5FC60F4104", // key identifier
+  "7A1814F64ACA808D4F691CB8B9A0A036A38A764A", // key identifier
   "ignored" // this field is ignored; passwords are supplied by pinentry
 )
 
