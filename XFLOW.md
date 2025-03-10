@@ -192,6 +192,50 @@ _ <- (c.sendFrame(Frames.mkWindowUpdateFrame(streamId, upd)) *> window
 
 5. **Full Window Restoration**: When an update is sent, it restores the window to its full initial size rather than incrementing by small amounts, which reduces the frequency of updates.
 
+#### Connection Between WINDOW_UPDATE and Stream Processing
+
+A critical aspect of the flow control implementation is how it connects WINDOW_UPDATE frames with the fs2 stream processing pipeline:
+
+```scala
+// In dataEvalEffectProducer method
+_ <- windowsUpdate(c, 0, c.globalBytesOfPendingInboundData, c.globalInboundWindow, len)
+_ <- windowsUpdate(c, streamId, stream.bytesOfPendingInboundData, stream.inboundWindow, len)
+```
+
+**1. Synchronizing Protocol and Application Layers**
+
+The `bytesOfPendingInboundData` counter serves as a bridge between the HTTP/2 protocol layer and the application layer:
+
+- When data arrives, `bytesOfPendingInboundData` is incremented
+- When data is processed by `dataEvalEffectProducer`, `bytesOfPendingInboundData` is decremented
+- This creates a feedback loop where the flow control system can respond to application processing speed
+
+**2. Preventing Data Overload**
+
+This design specifically prevents situations where the protocol would allow more data to arrive even though the application is falling behind in processing it:
+
+- If the application is slow to consume data (e.g., due to file writing latency), data will accumulate in the queue
+- As data accumulates, `bytesOfPendingInboundData` remains high
+- When `bytesOfPendingInboundData` is high, the condition `bytes_received < c.INITIAL_WINDOW_SIZE * 0.7` is not met
+- This prevents sending WINDOW_UPDATE frames, effectively applying back-pressure to the sender
+
+**3. Backpressure Mechanism**
+
+The system implements a form of backpressure that propagates from the application layer all the way to the network layer:
+
+- Slow application processing → High `bytesOfPendingInboundData` → No WINDOW_UPDATE frames sent → Sender must wait → Network traffic slows down
+
+**4. Integration with fs2**
+
+The integration with fs2 streams is elegant:
+
+- Data frames are processed through the `dataEvalEffectProducer` method
+- This method is called by `makeDataStream` which creates an fs2 `Stream`
+- The stream is then consumed by the application
+- The flow control counters are updated as part of this stream processing pipeline
+
+This tight integration ensures that the HTTP/2 flow control system is responsive to the actual processing capabilities of the application, preventing buffer bloat and memory pressure while maintaining optimal throughput.
+
 ### 4. Transmit Window Updates
 
 When a WINDOW_UPDATE frame is received, the `updateWindow` method is called:
