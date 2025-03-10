@@ -133,6 +133,65 @@ This method:
 3. Determines if a window update should be sent (when window falls below 30% and received bytes below 70%)
 4. Sends a WINDOW_UPDATE frame if needed
 
+#### Detailed Explanation of Window Tracking
+
+The `windowsUpdate` method contains two critical operations that track the flow control state:
+
+```scala
+bytes_received <- received.getAndUpdate(_ - len)
+bytes_available <- window.getAndUpdate(_ - len)
+```
+
+**1. Tracking Received Data**
+
+`received.getAndUpdate(_ - len)` atomically decrements the `received` counter by the length of the data just received and returns the previous value.
+
+- This counter tracks the total amount of data consumed from the initial window.
+- It's decremented (rather than incremented) because it's tracking the "negative space" - how much data has been consumed from the initial window.
+- The previous value is stored in `bytes_received` for use in determining if a window update is needed.
+
+**2. Updating Available Window**
+
+`window.getAndUpdate(_ - len)` atomically decrements the available window size by the length of the data just received and returns the previous value.
+
+- The `window` reference tracks the current available flow control window.
+- When data is received, the available window decreases because the receiver has consumed some of its advertised capacity.
+- The previous window size is stored in `bytes_available` for use in determining if a window update is needed.
+
+#### Decision Logic for Sending WINDOW_UPDATE
+
+After updating these counters, the method determines if a WINDOW_UPDATE frame should be sent:
+
+```scala
+send_update <- IO(
+  bytes_received < c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3
+)
+```
+
+This logic checks two conditions:
+1. If the total received data is less than 70% of the initial window size
+2. If the available window is less than 30% of the initial window size
+
+If both conditions are true, a WINDOW_UPDATE frame is sent to replenish the window:
+
+```scala
+upd = c.INITIAL_WINDOW_SIZE - bytes_available.toInt
+_ <- (c.sendFrame(Frames.mkWindowUpdateFrame(streamId, upd)) *> window
+  .update(_ + upd) *> Logger[IO].debug(s"Send UPDATE_WINDOW $upd streamId= $streamId")).whenA(send_update)
+```
+
+#### Advantages of This Approach
+
+1. **Atomic Updates**: Using `getAndUpdate` ensures that the operations are atomic, preventing race conditions in a concurrent environment.
+
+2. **Threshold-Based Updates**: By only sending WINDOW_UPDATE frames when the window falls below 30%, the implementation avoids sending too many small updates, which would be inefficient.
+
+3. **Proactive Window Management**: The system doesn't wait until the window is completely exhausted before sending an update, which could cause a stall in data flow.
+
+4. **Balanced Approach**: The dual condition (received < 70% AND available < 30%) ensures that updates are sent at an appropriate frequency - not too often, but before the window is depleted.
+
+5. **Full Window Restoration**: When an update is sent, it restores the window to its full initial size rather than incrementing by small amounts, which reduces the frequency of updates.
+
 ### 4. Transmit Window Updates
 
 When a WINDOW_UPDATE frame is received, the `updateWindow` method is called:
