@@ -308,6 +308,65 @@ The `updSyncQ` queue complements the backpressure system by preventing excessive
 
 This combination of reactive signaling through `xFlowSync` and update throttling through `updSyncQ` creates a robust, efficient backpressure system that adapts to varying network conditions and workloads.
 
+## Cancellation Mechanism
+
+The Quartz-H2 implementation includes a sophisticated cancellation mechanism that ensures proper cleanup of resources when streams are terminated or when the connection is shut down.
+
+### Double `offer(false)` Pattern
+
+A key aspect of the cancellation mechanism is the double `offer(false)` pattern used in the client implementation:
+
+```scala
+// In Http2ClientConnection.dropStreams()
+_ <- streams.traverse(s0 => s0.outXFlowSync.offer(false) *> s0.outXFlowSync.offer(false))
+```
+
+This pattern is necessary due to the recursive structure of the `txWindow_Transmit` method, which has two distinct blocking points where it waits on the `outXFlowSync` queue:
+
+```scala
+// First blocking point - when processing remaining data after a partial send
+b <- stream.outXFlowSync.take  // Line 130
+_ <- IO.raiseError(QH2InterruptException()).whenA(b == false)
+
+// Second blocking point - when no credit is available
+b <- stream.outXFlowSync.take  // Line 139
+_ <- IO.raiseError(QH2InterruptException()).whenA(b == false)
+```
+
+### How Cancellation Works
+
+1. **Signal Propagation**: When a stream or connection needs to be cancelled, `false` values are offered to the `outXFlowSync` queue.
+
+2. **Exception Raising**: When a `false` value is received by a waiting transmitter, it raises a `QH2InterruptException`:
+   ```scala
+   _ <- IO.raiseError(QH2InterruptException()).whenA(b == false)
+   ```
+
+3. **Recursive Cancellation**: Since `txWindow_Transmit` can be in a recursive call chain, two `offer(false)` calls are needed to ensure that all potential blocking points are addressed:
+   - The first `offer(false)` unblocks transmissions waiting to send remaining data
+   - The second `offer(false)` unblocks transmissions waiting for window credit
+
+### Practical Example
+
+Consider this scenario during connection shutdown:
+
+- Stream A is blocked at the first point, waiting to send remaining data
+- Stream B is blocked at the second point, waiting for window credit
+
+A single `offer(false)` per stream would only unblock one of these points, potentially leaving the other transmission hanging indefinitely. The double call ensures that both potential blocking points are addressed, guaranteeing that all transmission operations are properly cancelled.
+
+### Benefits of This Approach
+
+1. **Clean Resource Management**: Ensures that no operations are left hanging during shutdown
+
+2. **Prevents Memory Leaks**: By properly terminating all operations, it prevents memory leaks that could occur if operations were left in a blocked state
+
+3. **Graceful Degradation**: Allows the system to gracefully handle connection errors by properly cleaning up all in-flight operations
+
+4. **Functional Composition**: Leverages cats-effect's functional error handling to propagate cancellation signals through the operation chain
+
+This cancellation mechanism is a critical component of the flow control system, ensuring that the system can properly handle exceptional conditions and maintain resource integrity even during unexpected termination scenarios.
+
 ## Preventing Flow Control Errors
 
 Quartz-H2 implements several safeguards against flow control errors:
