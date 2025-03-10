@@ -8,16 +8,16 @@ This document describes the architecture of the Quartz-H2 HTTP/2 server, with a 
                                  ┌─────────────────────────────────────┐
                                  │           QuartzH2Server            │
                                  │                                     │
-                                 │  ┌─────────────────┐ ┌─────────────┐│
-                                 │  │   TLS Context   │ │HTTP Routes│ │|
-                                 │  └─────────────────┘ └─────────────┘│
+                                 │  ┌─────────────────┐ ┌─────────────┐ │
+                                 │  │   TLS Context   │ │HTTP Routes│ │
+                                 │  └─────────────────┘ └─────────────┘ │
                                  └───────────────┬─────────────────────┘
                                                  │
                                                  ▼
 ┌─────────────────┐           ┌─────────────────────────────────────┐
-│ Incoming        │           │         ServerSocketLoop            │
+│ Incoming        │           │         ServerSocketLoop             │
 │ Client Requests ├──────────►│ (Accepts connections & starts       │
-└─────────────────┘           │  Http2Connection for each client)   │
+└─────────────────┘           │  Http2Connection for each client)    │
                               └───────────────┬─────────────────────┘
                                               │
                                               ▼
@@ -116,24 +116,41 @@ updSyncQ <- Queue.dropping[IO, Unit](1)    // Window update queue
 
 ### 3. fs2 Streams
 
-The server uses fs2 streams extensively for processing data in a functional, composable way:
+The server uses fs2 streams extensively for processing data in a functional, composable way. It's important to understand that fs2 streams are declarative, not imperative:
+
+- **Stream Definition vs. Execution**: When defining a stream, you're creating a description of data processing, not executing the processing itself
+- **Lazy Evaluation**: Streams are only executed when explicitly compiled and run (via methods like `.compile.drain` or `.compile.toList`)
+- **Pure Description**: Stream definitions are pure and referentially transparent, with effects only occurring during execution
+
+Key stream usages in Quartz-H2:
 
 - **Packet Stream Processing**: Transforms raw socket data into HTTP/2 frames
 - **Request Body Processing**: Handles chunked request bodies with proper backpressure
 - **Response Generation**: Streams response data with flow control
 
 ```scala
-// Packet stream creation from socket
+// Packet stream DEFINITION from socket - note this only describes the stream,
+// it doesn't actually read from the socket until compiled and executed
 def makePacketStream(ch: IOChannel, keepAliveMs: Int, leftOver: Chunk[Byte]): Stream[IO, Chunk[Byte]] = {
   val s0 = Stream.chunk[IO, Byte](leftOver)
   val s1 = Stream.repeatEval(ch.read(keepAliveMs)).flatMap(c0 => Stream.chunk(c0))
   // Processing logic with Pull-based stream transformation
-  // ...
+  // The Pull type is a key part of fs2's internal stream algebra
+  // It allows for fine-grained control over stream consumption
+  def go(s: Stream[IO, Byte], leftover: Chunk[Byte]): Pull[IO, Byte, Unit] = {
+    // Pull-based logic for chunking HTTP/2 frames
+    // ...
+  }
+  // The stream definition is complete, but no data has been processed yet
+  go(s0 ++ s1, Chunk.empty[Byte]).stream.chunks
 }
+
+// Actual EXECUTION happens later when the stream is compiled and run:
+// makePacketStream(...).compile.drain
 ```
 
 ```scala
-// Data stream creation for request bodies
+// Data stream DEFINITION for request bodies - again, just describing the processing
 def makeDataStream(c: Http2ConnectionCommon, q: Queue[IO, ByteBuffer]) = {
   val dataStream0 = Stream.eval(dataEvalEffectProducer(c, q)).repeat.takeThrough { buffer =>
     // Process frames until END_STREAM flag
@@ -141,6 +158,9 @@ def makeDataStream(c: Http2ConnectionCommon, q: Queue[IO, ByteBuffer]) = {
   }
   dataStream0.flatMap(b => Stream.emits(ByteBuffer.allocate(b.remaining).put(b).array()))
 }
+
+// Actual processing occurs when this stream is compiled and executed elsewhere
+```
 ```
 
 ## Inbound Flow and Packet Parsing
@@ -154,10 +174,18 @@ The inbound data flow in Quartz-H2 follows a sophisticated pipeline that transfo
 ```scala
 def processIncoming(leftOver: Chunk[Byte]): IO[Unit] = (for {
   _ <- Logger[IO].trace(s"Http2Connection.processIncoming() leftOver= ${leftOver.size}")
+  // Here we define the stream, then compile and execute it in one go
+  // Note how makePacketStream returns a Stream description, which is then
+  // materialized and executed only when .compile.drain is called
   _ <- Http2Connection
     .makePacketStream(ch, HTTP2_KEEP_ALIVE_MS, leftOver)
+    // The packet_handler function is provided as a consumer to the foreach operator
+    // This creates a new stream description that applies packet_handler to each element
+    // No processing happens at this point - still just building the description
     .foreach(packet => { packet_handler(httpReq11, packet) })
+    // Only at this point is the stream actually compiled into a runnable program
     .compile
+    // And only here is that program executed, producing effects
     .drain
 } yield ()).handleErrorWith[Unit] {
   // Error handling logic
