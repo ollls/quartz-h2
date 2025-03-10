@@ -12,7 +12,7 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 sbt IOURING/run
 sbt -J-Xmx22G "IOURING/run --off"
 
-h2load  -D8 -c32  https://localhost:8443/ldt
+h2load  -D8 -c32  https://localhost:8443/mov_bbb.mp4
 h2load -D6 -c32 -m4 http://localhost:8443/mov_bbb.mp4
 
 ```
