@@ -8,16 +8,16 @@ This document describes the architecture of the Quartz-H2 HTTP/2 server, with a 
                                  ┌─────────────────────────────────────┐
                                  │           QuartzH2Server            │
                                  │                                     │
-                                 │  ┌─────────────────┐ ┌─────────────┐ │
-                                 │  │   TLS Context   │ │HTTP Routes│ │
-                                 │  └─────────────────┘ └─────────────┘ │
+                                 │  ┌─────────────────┐ ┌─────────────┐│
+                                 │  │   TLS Context   │ │HTTP Routes│ │|
+                                 │  └─────────────────┘ └─────────────┘│
                                  └───────────────┬─────────────────────┘
                                                  │
                                                  ▼
 ┌─────────────────┐           ┌─────────────────────────────────────┐
-│ Incoming        │           │         ServerSocketLoop             │
+│ Incoming        │           │         ServerSocketLoop            │
 │ Client Requests ├──────────►│ (Accepts connections & starts       │
-└─────────────────┘           │  Http2Connection for each client)    │
+└─────────────────┘           │  Http2Connection for each client)   │
                               └───────────────┬─────────────────────┘
                                               │
                                               ▼
