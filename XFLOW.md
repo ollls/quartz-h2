@@ -1,5 +1,59 @@
 # HTTP/2 Flow Control in Quartz-H2
 
+## Reactive Flow Control: The Quartz-H2 Advantage
+
+Quartz-H2 implements a cutting-edge reactive flow control system that seamlessly integrates with the fs2 streaming ecosystem. This implementation goes beyond the standard HTTP/2 flow control requirements to deliver exceptional performance, stability, and resource efficiency.
+
+### Inbound Traffic: Intelligent Reactive Backpressure
+
+The inbound data flow in Quartz-H2 is regulated by a sophisticated backpressure mechanism that adapts to application processing capabilities in real-time:
+
+- **Application-Aware Flow Control**: Unlike conventional implementations, our system monitors actual data consumption rates through the fs2 streaming pipeline.
+
+- **Adaptive Backpressure**: When application processing slows down, the system automatically throttles incoming data by delaying WINDOW_UPDATE frames, preventing buffer bloat and memory pressure.
+
+- **Precise Resource Management**: The dual-counter approach (`bytesOfPendingInboundData` and `inboundWindow`) creates a feedback loop that ensures optimal resource utilization even under variable load conditions.
+
+### Outbound Traffic: Responsive Transmission Control
+
+The outbound data flow is equally well-regulated, ensuring efficient data delivery without overwhelming receivers:
+
+- **Credit-Based Transmission**: The system precisely tracks available transmission windows and suspends data transmission when credits are exhausted.
+
+- **Non-Blocking Wait Mechanism**: When window limits are reached, transmissions elegantly pause using cats-effect's concurrency primitives, without blocking system resources.
+
+- **Immediate Reactivity**: When client WINDOW_UPDATE frames arrive, transmission resumes instantly, maintaining maximum throughput while respecting flow control constraints.
+
+This bidirectional reactive flow control system ensures Quartz-H2 maintains optimal performance under diverse network conditions and application workloads, making it an ideal choice for high-throughput, low-latency HTTP/2 applications.
+
+### Beyond Traditional HTTP/2 Implementations
+
+While most HTTP/2 implementations merely satisfy the specification requirements, Quartz-H2 takes flow control to the next level:
+
+- **End-to-End Backpressure**: Unlike traditional implementations that only manage protocol-level flow control, Quartz-H2 creates a complete backpressure chain from the network socket all the way to your application logic.
+
+- **Threshold-Based Window Updates**: Instead of naively updating windows after consuming any data, our implementation uses sophisticated thresholds (70%/30%) to minimize protocol overhead while maximizing throughput.
+
+- **Dual-Level Monitoring**: By tracking both consumed data and available window size, Quartz-H2 makes more intelligent decisions about when to send WINDOW_UPDATE frames compared to implementations that track only one metric.
+
+- **Automatic Resource Management**: While other implementations require manual window management, Quartz-H2 automatically handles window updates based on actual consumption patterns.
+
+### Seamless Integration with fs2 Streaming
+
+Quartz-H2 offers unparalleled ease of integration with your fs2-based applications:
+
+- **Direct Stream Consumption**: Data from HTTP/2 frames is automatically converted into fs2 streams, ready for immediate consumption in your application.
+
+- **Transparent Flow Control**: The connection between data consumption and flow control is handled automatically - just process your streams naturally and the system takes care of the rest.
+
+- **Functional Composition**: Leverage the full power of fs2's combinators to transform, filter, and process your HTTP/2 data without worrying about low-level flow control details.
+
+- **Resource Safety**: The tight integration with cats-effect ensures that resources are properly managed even in the face of cancellations or errors.
+
+By bridging the gap between network protocols and functional streaming, Quartz-H2 allows developers to focus on business logic while the system efficiently handles the complexities of HTTP/2 flow control.
+
+---
+
 This document explains how HTTP/2 flow control is implemented in the Quartz-H2 server, focusing on the mechanisms used to prevent senders from overwhelming receivers with data.
 
 ## HTTP/2 Flow Control Fundamentals
