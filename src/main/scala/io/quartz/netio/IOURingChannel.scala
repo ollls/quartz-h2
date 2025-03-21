@@ -112,9 +112,6 @@ class IOURingChannel(
       consumer <-
         IO(new Consumer[ByteBuffer] {
           override def accept(buffer: ByteBuffer): Unit = {
-            if (buffer == null) {
-              println("CB null - read")
-            }
             cb(buffer)
           }
         })
@@ -131,9 +128,6 @@ class IOURingChannel(
     for {
       consumer <- IO(new Consumer[ByteBuffer] {
         override def accept(buffer: ByteBuffer): Unit = {
-          if (buffer == null) {
-            println("CB null - write")
-          }
           cb(buffer)
         }
       })
@@ -207,7 +201,7 @@ class IOURingChannel(
     for {
       // _ <- IO(f_wRef.addAndGet(buffer.remaining()))
       b1 <- effectAsyncChannelIO(ring, ch1)((ring, ch1) => ioUringWriteIO(ring, ch1, buffer, _))
-        .handleErrorWith(e => IO.println(">>>>" + e + "<<<<<") *> IO.raiseError(e))
+        .handleErrorWith(e => IO.raiseError(e))
       // Check for null buffer or zero bytes written which could indicate a stalled connection
       _ <- IO
         .raiseError(new java.nio.channels.ClosedChannelException)
@@ -228,21 +222,21 @@ class IOURingChannel(
       for {
         r <- IO(new Runnable {
           override def run() = {
+            //close on socket fd, will be called in EVENT_HANDLER
+            //then close will call onClose call back <- this is how we get here
             cb(Right(()))
           }
         })
-        _ <- IO.println( "Initiated a close op")
-        _ <- IO(ring.queueClose(r, ch1))
-        _ <- IO.println( "close op is done")
+        _ <- ring.queueClose(r, ch1)
       } yield (Some(IO.unit))
     )
   } yield (result)
 
-  def close1(): IO[Unit] = for {
-    _ <- IO.println("LOW CLOSE - Closing potentially stalled connection")
+  /*
+  def close22(): IO[Unit] = for {
     _ <- IO.delay(ch1.close())
     // _ <- IO(ring.ring.close())
-  } yield ()
+  } yield ()*/
 
   def secure() = false
   // used in TLS mode to pass parameter from SNI tls extension

@@ -104,11 +104,15 @@ public class IoUring {
             int count = IoUring.getCqes(ring, resultBuffer, cqes, ringSize, shouldWait, timeoutMs);
             if (count == 0) {
                 didReadEverHappen = -1;
+                //no event tick, run thru all fds in the map, trigger onRead(null) termination call back.
+                handleReadTimeouts(resultBuffer, timeoutMs);
                 //handleReadTermination(resultBuffer);
             } // timeout or error condition, signal read to break loop
             for (int i = 0; i < count && i < ringSize; i++) {
                 try {
                     int eventType = handleEventCompletion(cqes, resultBuffer, i);
+                    //use the opportunity to close expired connection sitting on the same ring.
+                    handleReadTimeouts(resultBuffer, timeoutMs);
 
                     if (eventType == EVENT_TYPE_READ)
                         didReadEverHappen = 1;
@@ -151,24 +155,30 @@ public class IoUring {
         return -1;
     }
 
-    private void handleReadTermination(ByteBuffer results) {
+    private void handleReadTimeouts(ByteBuffer results, long timeoutMs) {
         int result = results.getInt();
         int fd = results.getInt();
         int eventType = results.get();
 
         for (AbstractIoUringChannel channel : fdToSocket.values()) {
 
-            // AbstractIoUringChannel channel = fdToSocket.get(fd);
             if (channel == null || channel.isClosed()) {
-                System.out.println("handleReadTermination: channel not found or closed");
+                //System.out.println("handleReadTermination: channel not found or closed");
                 return;
             }
 
-            // channel.handleReadCompletion(results, eventType);
-            System.out.println("handleReadTermination: channel found");
-            channel.readHandler().accept(null);
+            //System.out.println("handleReadTermination: channel found");
+             
+            //all sockets are permanently on ReadWait, process timeout thru Read callbacks
+            if (System.nanoTime() - channel.ts > timeoutMs * 1000000L) {
+               System.out.println( "expired - " + channel.toString() );
+               channel.readHandler().accept(null);
+               //close anyway, if no one wait on read CB
+               channel.close();
+            } else {
+                //System.out.println( "active");
+            }   
         }
-
     }
 
     private int handleEventCompletion(long cqes, ByteBuffer results, int i) {
@@ -181,6 +191,7 @@ public class IoUring {
             String ipAddress = IoUring.getCqeIpAddress(cqes, i);
             IoUringSocket socket = serverSocket.handleAcceptCompletion(this, serverSocket, result, ipAddress);
             if (socket != null) {
+                socket.ts = System.nanoTime();
                 fdToSocket.put(socket.fd(), socket);
             }
         } else {
@@ -214,8 +225,10 @@ public class IoUring {
                     }
                     channel.handleWriteCompletion(buffer, result);
                 } else if (eventType == EVENT_TYPE_CLOSE) {
-                    channel.setClosed(true);
-                    channel.closeHandler().run();
+                    //System.out.println( "EVENT_TYPE_CLOSE");
+                    channel.close();
+                    //channel.closeHandler().run();
+                    //channel.setClosed(true);
                 }
             } catch (Exception ex) {
                 if (channel.exceptionHandler() != null) {
@@ -327,6 +340,7 @@ public class IoUring {
     }
 
     public IoUring queueClose(AbstractIoUringChannel channel) {
+        //System.out.println( "public IoUring queueClose(AbstractIoUringChannel channel)");
         IoUring.queueClose(ring, channel.fd());
         return this;
     }

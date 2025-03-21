@@ -30,6 +30,7 @@ public class IoUringSocket extends AbstractIoUringSocket {
     }
 
     void handleConnectCompletion(IoUring ioUring, int result) {
+        this.ts = System.nanoTime();
         if (result != 0) {
             // TODO: better error messages, users don't have access to errno
             throw new RuntimeException("Connection result was: " + result);

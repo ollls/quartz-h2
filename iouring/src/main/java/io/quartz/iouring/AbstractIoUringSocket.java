@@ -20,6 +20,7 @@ public class AbstractIoUringSocket extends AbstractIoUringChannel {
         super(fd);
         this.ipAddress = ipAddress;
         this.port = port;
+        this.ts = System.nanoTime();
     }
 
     public String ipAddress() {

@@ -712,7 +712,7 @@ class QuartzH2Server(
 
         //tls_ch <- IO(TLSChannel(sslCtx.get, ch, semRW))
 
-        _ <- IO(TLSChannel(sslCtx.get, ch))
+        f1 <- IO(TLSChannel(sslCtx.get, ch))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
           .flatMap(ch =>
             IO(ch)
@@ -722,8 +722,7 @@ class QuartzH2Server(
                 })
               )(ch => { ch._1.close() *> IO.println( "CONNECTION EXIT") *> rings.release(ring) })
               .start
-          )
-          .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))
+          ).handleErrorWith( e => errorHandler(e) *> ch.close() *> rings.release(ring))
       } yield ()
 
       _ <- loop.iterateUntil(_ => shutdownFlag)

@@ -47,6 +47,7 @@ public class IoUringServerSocket extends AbstractIoUringSocket {
     }
 
     IoUringSocket handleAcceptCompletion(IoUring ioUring, IoUringServerSocket serverSocket, int channelFd, String ipAddress) {
+        this.ts = System.nanoTime();
         if (channelFd < 0) {
             return null;
         }

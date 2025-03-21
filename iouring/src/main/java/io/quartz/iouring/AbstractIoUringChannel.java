@@ -12,6 +12,7 @@ import java.util.function.Consumer;
  */
 public abstract class AbstractIoUringChannel {
     private final int fd;
+    long  ts;  //last activite time stamp 
     private final ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> readBufferMap = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> writeBufferMap = new ConcurrentHashMap<>();
     private boolean closed = false;
@@ -34,6 +35,7 @@ public abstract class AbstractIoUringChannel {
         //    close();
         //    return;
         //}
+        this.ts = System.nanoTime();
         if (readHandler() != null) {
             if (bytesRead < 0) { 
                 close();
@@ -52,6 +54,7 @@ public abstract class AbstractIoUringChannel {
         //    return;
         //}
         //buffer.position(buffer.position() + bytesWritten);
+        this.ts = System.nanoTime();
         if (writeHandler() != null) {
             if (bytesWritten < 0) { 
                 close();
@@ -68,6 +71,7 @@ public abstract class AbstractIoUringChannel {
      * Closes the socket.
      */
     public void close() {
+        //System.out.println( "AbstractIoUringChannel::close()");
         if (closed) {
             return;
         }
