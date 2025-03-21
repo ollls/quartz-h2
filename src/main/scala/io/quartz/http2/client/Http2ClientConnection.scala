@@ -59,7 +59,7 @@ object Http2ClientConnection {
       refDecoder <- Ref[IO].of[HeaderDecoder](null)
       refsId <- Ref[IO].of(1)
       hSem <- Semaphore[IO](1)
-      hSem2 <- Semaphore[IO](1)
+      terminateWrite <- Ref[IO].of(false)
       awaitSettings <- Deferred[IO, Boolean]
       settings0 <- Ref[IO].of(
         Http2Settings()
@@ -80,7 +80,7 @@ object Http2ClientConnection {
         outq,
         f0,
         hSem,
-        hSem2,
+        terminateWrite,
         awaitSettings,
         settings0,
         globalBytesOfPendingInboundData,
@@ -124,7 +124,7 @@ class Http2ClientConnection(
     outq: Queue[IO, ByteBuffer],
     outBoundFiber: Fiber[IO, Throwable, Nothing],
     hSem: Semaphore[IO],
-    hSem2: Semaphore[IO],
+    terminateWrite: Ref[cats.effect.IO, Boolean],
     awaitSettings: Deferred[IO, Boolean],
     settings1: Ref[IO, Http2Settings],
     globalBytesOfPendingInboundData: Ref[IO, Long],
@@ -137,7 +137,7 @@ class Http2ClientConnection(
       inboundWindow,
       transmitWindow,
       outq,
-      hSem2
+      terminateWrite
     ) {
 
   class Http2ClientStream(

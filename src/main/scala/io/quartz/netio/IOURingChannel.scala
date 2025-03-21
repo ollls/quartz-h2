@@ -5,10 +5,13 @@ import java.net.SocketAddress
 import java.util.function.{Consumer, BiConsumer}
 import java.nio.ByteBuffer
 import cats.effect.IO
+import cats.effect.Ref
 import fs2.Chunk
+import java.util.concurrent.atomic.AtomicInteger
 import io.quartz.iouring.{IoUringServerSocket, IoUringSocket, IoUring}
 import scala.concurrent.ExecutionContextExecutorService
 import cats.implicits._
+import scala.concurrent.duration._
 
 object IOURingChannel {
 
@@ -28,7 +31,10 @@ object IOURingChannel {
     ring.execute()
   }
 
-  def accept(ring: IoUring, serverSocket: IoUringServerSocket): IO[(IoUring, IoUringSocket)] = {
+  def accept(
+      ring: IoUring,
+      serverSocket: IoUringServerSocket
+  ): IO[(IoUring, IoUringSocket)] = {
     for {
       result <- IO.async[(IoUring, IoUringSocket)](cb =>
         for {
@@ -41,9 +47,15 @@ object IOURingChannel {
 
 }
 
-class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOutMs: Long) extends IOChannel {
+class IOURingChannel(
+    val ring: IoUringEntry,
+    val ch1: IoUringSocket,
+    var timeOutMs: Long
+) extends IOChannel {
 
   var f_putBack: ByteBuffer = null
+
+  // val f_wRef = AtomicInteger(0)
 
   def put(bb: ByteBuffer): IO[Unit] = IO { f_putBack = bb }
 
@@ -70,21 +82,27 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
     directBuffer;
   }
 
-
-  def effectAsyncChannelIO[A](ring: IoUringEntry, ch: IoUringSocket)(
-      op: (ring: IoUringEntry, ch: IoUringSocket) => (A => Unit) => IO[Any]
+  def effectAsyncChannelIO(ring: IoUringEntry, ch: IoUringSocket)(
+      op: (ring: IoUringEntry, ch: IoUringSocket) => (
+          ByteBuffer => Unit
+      ) => IO[Any]
   ) = {
-    IO.async[A](cb =>
+    IO.async[ByteBuffer](cb =>
       IO(op(ring, ch)).flatMap(handler => {
-        val f1: A => Unit = bb => { cb(Right(bb)) }
-        // todo: investigate how to catch error
+        val f1: ByteBuffer => Unit = bb => {
+          if (bb == null) {
+            cb(Left(new java.nio.channels.ClosedChannelException()))
+          } else if (bb.position() == 0 && bb.capacity() > 0) {
+            cb(Left(new java.nio.channels.ClosedChannelException()))
+          } else cb(Right(bb))
+        }
         handler(f1) *> IO(Some(IO.unit))
       })
     )
   }
 
   private def ioUringReadIO(
-      ring:  IoUringEntry,
+      ring: IoUringEntry,
       ch: IoUringSocket,
       bufferDirect: ByteBuffer,
       cb: ByteBuffer => Unit
@@ -94,14 +112,16 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
       consumer <-
         IO(new Consumer[ByteBuffer] {
           override def accept(buffer: ByteBuffer): Unit = {
+            if (buffer == null) {
+              println("CB null - read")
+            }
             cb(buffer)
           }
-        })  
+        })
       _ <- ring.queueRead(consumer, ch, bufferDirect)
     } yield ()
   }
 
-  
   private def ioUringWriteIO(
       ring: IoUringEntry,
       ch: IoUringSocket,
@@ -111,13 +131,15 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
     for {
       consumer <- IO(new Consumer[ByteBuffer] {
         override def accept(buffer: ByteBuffer): Unit = {
+          if (buffer == null) {
+            println("CB null - write")
+          }
           cb(buffer)
         }
       })
-      _ <- ring.queueWrite(consumer, ch, /*toDirectBuffer(*/bufferDirect)
+      _ <- ring.queueWrite(consumer, ch, /*toDirectBuffer(*/ bufferDirect)
     } yield ()
   }
-
 
   private def submit(ring: IoUring) = {
     this.synchronized {
@@ -137,7 +159,7 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
         ret == 0
       } do ()
 
-      ret     
+      ret
 
     } finally {
       lock.unlock()
@@ -163,10 +185,10 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
         if (f_putBack != null) {
           IO(dst.put(f_putBack)) >> IO { f_putBack = null }
         } else IO.unit
-      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, dst, _))
+      b1 <- effectAsyncChannelIO(ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, dst, _))
+      _ <- IO.raiseWhen(b1 == null)(new java.nio.channels.ClosedChannelException)
       n <- IO(b1.position())
       _ <- IO.raiseWhen(n <= 0)(new java.nio.channels.ClosedChannelException)
-
     } yield (n)
   }
 
@@ -174,18 +196,54 @@ class IOURingChannel(val ring: IoUringEntry, val ch1: IoUringSocket, var timeOut
     for {
       _ <- IO(this.timeOutMs = timeOutMs)
       bb <- IO(ByteBuffer.allocateDirect(TCPChannel.HTTP_READ_PACKET))
-      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, bb, _))
-      _ <- IO.raiseError(new java.nio.channels.ClosedChannelException).whenA(b1.position == 0)
+      b1 <- effectAsyncChannelIO(ring, ch1)((ring, ch1) => ioUringReadIO(ring, ch1, bb, _))
+      _ <- IO
+        .raiseError(new java.nio.channels.ClosedChannelException)
+        .whenA(b1 == null || b1.position == 0)
     } yield (Chunk.byteBuffer(b1.flip))
   }
 
   def write(buffer: ByteBuffer): IO[Int] = {
     for {
-      b1 <- effectAsyncChannelIO[ByteBuffer](ring, ch1)((ring, ch1) => ioUringWriteIO(ring, ch1, buffer, _))
+      // _ <- IO(f_wRef.addAndGet(buffer.remaining()))
+      b1 <- effectAsyncChannelIO(ring, ch1)((ring, ch1) => ioUringWriteIO(ring, ch1, buffer, _))
+        .handleErrorWith(e => IO.println(">>>>" + e + "<<<<<") *> IO.raiseError(e))
+      // Check for null buffer or zero bytes written which could indicate a stalled connection
+      _ <- IO
+        .raiseError(new java.nio.channels.ClosedChannelException)
+        .whenA(b1 == null || b1.position == 0)
     } yield (b1.position())
   }
 
-  def close(): IO[Unit] = IO.delay(ch1.close())
+  def configureSocketTimeouts(): IO[Unit] = IO {
+    // Set a timeout that's appropriate for your application needs
+    // For Wi-Fi connections, shorter timeouts can help detect disconnections faster
+    ch1.setTimeout(5000) // 5 seconds timeout
+  }
+
+  // configureSocketTimeouts()
+
+  def close(): IO[Unit] = for {
+    result <- IO.async[Unit](cb =>
+      for {
+        r <- IO(new Runnable {
+          override def run() = {
+            cb(Right(()))
+          }
+        })
+        _ <- IO.println( "Initiated a close op")
+        _ <- IO(ring.queueClose(r, ch1))
+        _ <- IO.println( "close op is done")
+      } yield (Some(IO.unit))
+    )
+  } yield (result)
+
+  def close1(): IO[Unit] = for {
+    _ <- IO.println("LOW CLOSE - Closing potentially stalled connection")
+    _ <- IO.delay(ch1.close())
+    // _ <- IO(ring.ring.close())
+  } yield ()
+
   def secure() = false
   // used in TLS mode to pass parameter from SNI tls extension
   def remoteAddress(): IO[SocketAddress] = ???

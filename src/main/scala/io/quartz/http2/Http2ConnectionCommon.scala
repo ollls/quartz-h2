@@ -19,7 +19,7 @@ trait Http2ConnectionCommon(
     val globalInboundWindow: Ref[IO, Long],
     val globalTransmitWindow: Ref[IO, Long],
     val outq: Queue[IO, ByteBuffer],
-    val hSem2: Semaphore[IO] /* not used */
+    val terminateOutBound: Ref[IO, Boolean]
 ) {
   private case class txWindow_SplitDataFrame(buffer: ByteBuffer, dataLen: Int)
 
@@ -186,6 +186,12 @@ trait Http2ConnectionCommon(
 
   protected def sendDataFrame(streamId: Int, bb: ByteBuffer): IO[Unit] =
     for {
+      terminate <- terminateOutBound.get
+      _ <- if (terminate) 
+           IO.raiseError(new Exception("Connection terminating - outbound data transmission aborted"))
+         else 
+           IO.unit  
+
       t <- IO(Http2Connection.parseFrame(bb))
       len = t._1
       _ <- Logger[IO].trace(s"sendDataFrame() - $len bytes")

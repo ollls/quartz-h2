@@ -30,7 +30,9 @@ object MyApp extends IOApp {
       Either.cond(
         !request.uri.getPath().endsWith("na.txt"),
         request.hdr("test_tid" -> "ABC123Z9292827"),
-        Response.Error(StatusCode.Forbidden).asText("Denied: " + request.uri.getPath())
+        Response
+          .Error(StatusCode.Forbidden)
+          .asText("Denied: " + request.uri.getPath())
       )
     )
 
@@ -47,29 +49,54 @@ object MyApp extends IOApp {
         _ <-
           req.stream.compile.drain // properly ignore incoming data, we must flush it, generaly if you sure there will be no data, you can ignore.
         result_text <- IO(req.sniServerNames match {
-          case Some(hosts) => s"Host names in TLS SNI extension: ${hosts.mkString(",")}"
-          case None        => "No TLS SNI host names provided or unsecure connection"
+          case Some(hosts) =>
+            s"Host names in TLS SNI extension: ${hosts.mkString(",")}"
+          case None => "No TLS SNI host names provided or unsecure connection"
         })
       } yield (Response.Ok().asText(result_text))
 
     case req @ GET -> Root / "headers" =>
-      IO(Response.Ok().asText(s"connId=${req.connId} streamId=${req.streamId}\n${req.headers.printHeaders}"))
+      IO(
+        Response
+          .Ok()
+          .asText(
+            s"connId=${req.connId} streamId=${req.streamId}\n${req.headers.printHeaders}"
+          )
+      )
 
     case req @ GET -> "pub" /: remainig_path =>
       IO(Response.Ok().asText(remainig_path.toString()))
 
     // GET with two parameters
-    case req @ GET -> Root / "hello" / "1" / "2" / "user2" :? param1(test) :? param2(test2) =>
+    case req @ GET -> Root / "hello" / "1" / "2" / "user2" :? param1(
+          test
+        ) :? param2(test2) =>
       IO(Response.Ok().asText("param1=" + test + "  " + "param2=" + test2))
 
     // GET with paameter, cookies and custom headers
     case GET -> Root / "hello" / "user" / StringVar(userId) :? param1(par) =>
-      val headers = Headers("procid" -> "header_value_from_server", "content-type" -> ContentType.Plain.toString)
+      val headers = Headers(
+        "procid" -> "header_value_from_server",
+        "content-type" -> ContentType.Plain.toString
+      )
       val c1 = Cookie("testCookie1", "ABCD", secure = true)
       val c2 = Cookie("testCookie2", "ABCDEFG", secure = false)
       val c3 =
-        Cookie("testCookie3", "1A8BD0FC645E0", secure = false, expires = Some(java.time.ZonedDateTime.now.plusHours(5)))
-      IO(Response.Ok().hdr(headers).cookie(c1).cookie(c2).cookie(c3).asText(s"$userId with para1 $par"))
+        Cookie(
+          "testCookie3",
+          "1A8BD0FC645E0",
+          secure = false,
+          expires = Some(java.time.ZonedDateTime.now.plusHours(5))
+        )
+      IO(
+        Response
+          .Ok()
+          .hdr(headers)
+          .cookie(c1)
+          .cookie(c2)
+          .cookie(c3)
+          .asText(s"$userId with para1 $par")
+      )
 
     // automatic multi-part upload, file names preserved
     case req @ POST -> Root / "mpart" =>
@@ -109,7 +136,8 @@ object MyApp extends IOApp {
       val BLOCK_SIZE = 32000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
-      } yield (HttpRangeRequest.makeResponse(req, jpath, ContentType.Video_MP4, BLOCK_SIZE))
+      } yield (HttpRangeRequest
+        .makeResponse(req, jpath, ContentType.Video_MP4, BLOCK_SIZE))
 
     // your web site files in the folder "web" under web_root.
     // browser path: https://localhost:8443/web/index.html
@@ -129,13 +157,26 @@ object MyApp extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] =
     for {
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG)).whenA(args.find(_ == "--debug").isDefined)
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.ERROR)).whenA(args.find(_ == "--error").isDefined)
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF)).whenA(args.find(_ == "--off").isDefined)
-      _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE)).whenA(args.find(_ == "--trace").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG))
+        .whenA(args.find(_ == "--debug").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.ERROR))
+        .whenA(args.find(_ == "--error").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF))
+        .whenA(args.find(_ == "--off").isDefined)
+      _ <- IO(QuartzH2Server.setLoggingLevel(Level.TRACE))
+        .whenA(args.find(_ == "--trace").isDefined)
 
-      ctx <- QuartzH2Server.buildSSLContext("TLSv1.3", "keystore.jks", "password")
-      exitCode <- new QuartzH2Server("localhost", 8443, 12000, Some(ctx)) // , incomingWinSize = 1000000)
+      ctx <- QuartzH2Server.buildSSLContext(
+        "TLSv1.3",
+        "keystore.jks",
+        "password"
+      )
+      exitCode <- new QuartzH2Server(
+        "10.0.0.6",
+        8443,
+        12000,
+        Some(ctx)
+      ) // , incomingWinSize = 1000000)
         .iouring_startIO(R, filter)
 
     } yield (exitCode)

@@ -158,6 +158,7 @@ Java_io_quartz_iouring_IoUring_getCqes(JNIEnv *env, jclass cls, jlong ring_addre
         ts.tv_nsec = (timeoutMs % 1000) * 1000000;  // Convert remaining ms to nanoseconds
         ret = io_uring_wait_cqe_timeout(ring, cqes, &ts);
         if (ret < 0) {
+            //printf( "Timeout - zero entries");
             //timeout - zero entries
             return 0; //-1;
         }

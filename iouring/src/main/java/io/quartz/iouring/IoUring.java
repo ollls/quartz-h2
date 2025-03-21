@@ -1,10 +1,10 @@
 package io.quartz.iouring;
 
-import org.eclipse.collections.impl.map.mutable.primitive.IntObjectHashMap;
 import io.quartz.iouring.util.ReferenceCounter;
 import io.quartz.iouring.util.NativeLibraryLoader;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -21,7 +21,7 @@ public class IoUring {
 
     private final long ring;
     private final int ringSize;
-    private final IntObjectHashMap<AbstractIoUringChannel> fdToSocket = new IntObjectHashMap<>();
+    private final ConcurrentHashMap<Integer, AbstractIoUringChannel> fdToSocket = new ConcurrentHashMap<>();
     private Consumer<Exception> exceptionHandler;
     private boolean closed = false;
     private final long cqes;
@@ -89,25 +89,29 @@ public class IoUring {
         return doExecute(false);
     }
 
-    public int getCqes( long timeoutMs ) {
+    public int getCqes(long timeoutMs) {
         return doGetCqes(true, timeoutMs);
     }
 
     private int doGetCqes(boolean shouldWait, long timeoutMs) {
 
-        int didReadEverHappen = 0;    
+        int didReadEverHappen = 0;
 
         if (closed) {
             throw new IllegalStateException("io_uring closed");
         }
         try {
             int count = IoUring.getCqes(ring, resultBuffer, cqes, ringSize, shouldWait, timeoutMs);
-            if( count == 0 ) { didReadEverHappen = -1; handleReadTermination(resultBuffer); }//timeout or error condition, signal read to break loop
+            if (count == 0) {
+                didReadEverHappen = -1;
+                //handleReadTermination(resultBuffer);
+            } // timeout or error condition, signal read to break loop
             for (int i = 0; i < count && i < ringSize; i++) {
                 try {
                     int eventType = handleEventCompletion(cqes, resultBuffer, i);
 
-                    if ( eventType == EVENT_TYPE_READ ) didReadEverHappen = 1;
+                    if (eventType == EVENT_TYPE_READ)
+                        didReadEverHappen = 1;
 
                 } finally {
                     IoUring.markCqeSeen(ring, cqes, i);
@@ -152,13 +156,18 @@ public class IoUring {
         int fd = results.getInt();
         int eventType = results.get();
 
-        AbstractIoUringChannel channel = fdToSocket.get(fd);
-        if (channel == null || channel.isClosed()) {
-            return;
-        }
+        for (AbstractIoUringChannel channel : fdToSocket.values()) {
 
-        //channel.handleReadCompletion(results, eventType);
-        channel.readHandler().accept( ByteBuffer.allocateDirect(0));
+            // AbstractIoUringChannel channel = fdToSocket.get(fd);
+            if (channel == null || channel.isClosed()) {
+                System.out.println("handleReadTermination: channel not found or closed");
+                return;
+            }
+
+            // channel.handleReadCompletion(results, eventType);
+            System.out.println("handleReadTermination: channel found");
+            channel.readHandler().accept(null);
+        }
 
     }
 
@@ -364,7 +373,8 @@ public class IoUring {
     private static native int submitAndGetCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize,
             boolean shouldWait);
 
-    private static native int getCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize, boolean shouldWait, long timeoutMs);
+    private static native int getCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize, boolean shouldWait,
+            long timeoutMs);
 
     private static native int getCqesBlocking(long ring, ByteBuffer buffer, long cqes, int cqesSize);
 

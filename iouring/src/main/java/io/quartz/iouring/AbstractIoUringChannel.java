@@ -1,10 +1,10 @@
 package io.quartz.iouring;
 
-import org.eclipse.collections.impl.map.mutable.primitive.LongObjectHashMap;
 import io.quartz.iouring.util.NativeLibraryLoader;
 import io.quartz.iouring.util.ReferenceCounter;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -12,8 +12,8 @@ import java.util.function.Consumer;
  */
 public abstract class AbstractIoUringChannel {
     private final int fd;
-    private final LongObjectHashMap<ReferenceCounter<ByteBuffer>> readBufferMap = new LongObjectHashMap<>();
-    private final LongObjectHashMap<ReferenceCounter<ByteBuffer>> writeBufferMap = new LongObjectHashMap<>();
+    private final ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> readBufferMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> writeBufferMap = new ConcurrentHashMap<>();
     private boolean closed = false;
     private Consumer<ByteBuffer> readHandler;
     private Consumer<ByteBuffer> writeHandler;
@@ -30,24 +30,37 @@ public abstract class AbstractIoUringChannel {
     }
 
     protected void handleReadCompletion(ByteBuffer buffer, int bytesRead) {
-        if (bytesRead < 0) {
-            close();
-            return;
-        }
-        buffer.position(buffer.position() + bytesRead);
+        //if (bytesRead < 0) {
+        //    close();
+        //    return;
+        //}
         if (readHandler() != null) {
-            readHandler().accept(buffer);
+            if (bytesRead < 0) { 
+                close();
+                readHandler().accept(null);
+            }    
+            else {
+              buffer.position(buffer.position() + bytesRead);  
+              readHandler().accept(buffer);
+            }
         }
     }
 
     protected void handleWriteCompletion(ByteBuffer buffer, int bytesWritten) {
-        if (bytesWritten < 0) {
-            close();
-            return;
-        }
-        buffer.position(buffer.position() + bytesWritten);
+        //if (bytesWritten < 0) {
+        //    close();
+        //    return;
+        //}
+        //buffer.position(buffer.position() + bytesWritten);
         if (writeHandler() != null) {
-            writeHandler().accept(buffer);
+            if (bytesWritten < 0) { 
+                close();
+                writeHandler().accept(null);
+            }    
+            else {
+                buffer.position(buffer.position() + bytesWritten);
+                writeHandler().accept(buffer);
+            }    
         }
     }
 
@@ -146,7 +159,7 @@ public abstract class AbstractIoUringChannel {
      *
      * @return the read buffer map
      */
-    LongObjectHashMap<ReferenceCounter<ByteBuffer>> readBufferMap() {
+    ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> readBufferMap() {
         return readBufferMap;
     }
 
@@ -155,7 +168,7 @@ public abstract class AbstractIoUringChannel {
      *
      * @return the write buffer map
      */
-    LongObjectHashMap<ReferenceCounter<ByteBuffer>> writeBufferMap() {
+    ConcurrentHashMap<Long, ReferenceCounter<ByteBuffer>> writeBufferMap() {
         return writeBufferMap;
     }
 

@@ -1,6 +1,7 @@
 package io.quartz
 
 import cats.effect.{IO, Ref, Deferred, ExitCode}
+import cats.effect.std.Semaphore
 
 import fs2.{Stream, Chunk}
 
@@ -500,7 +501,7 @@ class QuartzH2Server(
 
       _ <- accept
         .flatMap(ch =>
-          (IO(TLSChannel(sslCtx.get, ch))
+          (IO(TLSChannel(sslCtx.get, ch, null))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
             .flatTap(c =>
               Logger[IO].info(
@@ -636,7 +637,7 @@ class QuartzH2Server(
 
       rings <- IoUringTbl(this, nrings)
 
-      serverSocket <- IO(new IoUringServerSocket(PORT))
+      serverSocket <- IO(new IoUringServerSocket(HOST, PORT))
 
       _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
 
@@ -693,13 +694,14 @@ class QuartzH2Server(
 
       rings <- IoUringTbl(this, nrings)
 
-      serverSocket <- IO(new IoUringServerSocket(PORT))
+      serverSocket <- IO(new IoUringServerSocket(HOST, PORT))
 
       _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
 
       acceptURing <- IO(new IoUring(4096))
 
       loop = for {
+        semRW <- Semaphore[IO](1)
         a <- IOURingChannel.accept(acceptURing, serverSocket)
         (ring_srv, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
@@ -707,8 +709,11 @@ class QuartzH2Server(
         ring <- rings.get
 
         ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
+        _  <- IO(ch.ch1.setBuffers( 1024 * 1024, 4 * 1024 * 1024 ))
 
-        _ <- IO(TLSChannel(sslCtx.get, ch))
+        //tls_ch <- IO(TLSChannel(sslCtx.get, ch, semRW))
+
+        _ <- IO(TLSChannel(sslCtx.get, ch, semRW))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
           .flatMap(ch =>
             IO(ch)
@@ -716,7 +721,7 @@ class QuartzH2Server(
                 doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => {
                   errorHandler(e)
                 })
-              )(ch => { ch._1.close() *> rings.release(ring) })
+              )(ch => { ch._1.close() *> IO.println( "CONNECTION EXIT") *> rings.release(ring) })
               .start
           )
           .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))

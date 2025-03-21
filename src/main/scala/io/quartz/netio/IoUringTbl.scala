@@ -29,6 +29,13 @@ case class IoUringEntry(
     ring: IoUring
 ) {
 
+  def queueClose(run: Runnable, channel: IoUringSocket): IO[Unit] =
+    for {
+      _ <- IO(channel.onClose(run))
+      queueCloseIO <- IO(IO(ring.queueClose(channel)))
+      _ <- q.offer(queueCloseIO.void)
+    } yield ()
+
   /** Synchronized wrapper for IoUring's queueRead method.
     *
     * @param entry
@@ -141,8 +148,12 @@ object IoUringTbl {
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
     val processCqes = IO
       .blocking(entry.ring.getCqes(9000))
-      .handleErrorWith { case _: Throwable =>
-        Logger[IO].error("IoUring: ring shutdown") >> IO(IoUringTbl.shutdown = true) >> server.shutdown
+      .handleErrorWith { case e: Throwable =>
+        // Log more detailed information about the error to help diagnose Wi-Fi disconnection issues
+        Logger[IO].error(
+          s"IoUring: ring shutdown due to error: ${e.getMessage}. This might indicate network disconnection."
+        ) >>
+          IO(IoUringTbl.shutdown = true) >> server.shutdown
       }
 
     // Continue until shutdown becomes true

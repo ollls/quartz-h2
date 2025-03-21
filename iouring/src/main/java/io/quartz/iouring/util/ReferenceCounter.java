@@ -1,8 +1,10 @@
 package io.quartz.iouring.util;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class ReferenceCounter<T> {
     private final T ref;
-    private int referenceCount = 0;
+    private final AtomicInteger referenceCount = new AtomicInteger(0);
 
     public ReferenceCounter(T ref) {
         this.ref = ref;
@@ -13,10 +15,10 @@ public class ReferenceCounter<T> {
     }
 
     public int incrementReferenceCount() {
-        return ++referenceCount;
+        return referenceCount.incrementAndGet();
     }
 
     public int deincrementReferenceCount() {
-        return --referenceCount;
+        return referenceCount.decrementAndGet();
     }
 }

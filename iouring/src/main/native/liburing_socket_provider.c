@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <liburing.h>
 #include <unistd.h>
@@ -28,6 +29,13 @@ Java_io_quartz_iouring_AbstractIoUringSocket_create(JNIEnv *env, jclass cls) {
     }
 
     ret = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
+    if (ret == -1) {
+        throw_exception(env, "setsockopt", ret);
+        return -1;
+    }
+
+    int flag = 1; // Set to 1 to enable TCP_NODELAY (disable Nagle's algorithm)
+    ret = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
     if (ret == -1) {
         throw_exception(env, "setsockopt", ret);
         return -1;
@@ -60,6 +68,25 @@ Java_io_quartz_iouring_IoUringServerSocket_bind(JNIEnv *env, jclass cls, jlong s
         return;
     }
 } 
+
+
+JNIEXPORT jint JNICALL
+Java_io_quartz_iouring_AbstractIoUringSocket_setSocketBuffers(JNIEnv *env, jclass cls, jint fd, jint rcv_buf_size, jint snd_buf_size) {
+    // Set receive buffer size (SO_RCVBUF)
+    int ret = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcv_buf_size, sizeof(rcv_buf_size));
+    if (ret < 0) {
+        throw_exception(env, "setsockopt SO_RCVBUF failed", ret);
+        return -1;
+    }
+    
+    // Set send buffer size (SO_SNDBUF)
+    ret = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &snd_buf_size, sizeof(snd_buf_size));
+    if (ret < 0) {
+        throw_exception(env, "setsockopt SO_SNDBUF failed", ret);
+        return -1;
+    }
+    return 0;
+}
 
 
 /*

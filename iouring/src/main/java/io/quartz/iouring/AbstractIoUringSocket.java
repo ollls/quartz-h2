@@ -34,9 +34,15 @@ public class AbstractIoUringSocket extends AbstractIoUringChannel {
         setSocketTimeout(fd(), timeoutMilliseconds);
     }
 
+    public void setBuffers(int rcvBufSize, int sndBufSize) {
+        setSocketBuffers(fd(), rcvBufSize, sndBufSize);
+    }
+
     static native int create();
 
     static native int setSocketTimeout(int fd, int timeoutMilliseconds);
+
+    static native int setSocketBuffers(int fd, int rcv_buf_size, int snd_buf_size);
 
     static {
         NativeLibraryLoader.load();
