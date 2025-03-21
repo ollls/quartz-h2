@@ -30,7 +30,7 @@ object Http2Connection {
   ): IO[Boolean] = {
     for {
       bb <- outq.take
-      size <- IO(bb.remaining())
+      size <- if( bb != null) IO(bb.remaining()) else IO(1)
       // _ <- Logger[IO].trace( "packet is about to send")
       res <- if (bb == null) IO(true) else IO(false)
       _ <- ch.write(bb).whenA(res == false)

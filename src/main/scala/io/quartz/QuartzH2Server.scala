@@ -406,7 +406,7 @@ class QuartzH2Server(
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val nrings = cores / 2 // 12 cores gives 6 rings - around 15% boost over NIO2
-    val h2streams = cores * 2 // optimal setting tested with h2load
+    val h2streams = cores * 4
     val THREAD_POOL_SIZE = cores - nrings
     // QuartzH2Server.setLoggingLevel( Level.OFF)
     val fjj = new ForkJoinWorkerThreadFactory {
@@ -501,7 +501,7 @@ class QuartzH2Server(
 
       _ <- accept
         .flatMap(ch =>
-          (IO(TLSChannel(sslCtx.get, ch, null))
+          (IO(TLSChannel(sslCtx.get, ch))
             .flatMap(c => c.ssl_init_h2().map((c, _)))
             .flatTap(c =>
               Logger[IO].info(
@@ -701,7 +701,6 @@ class QuartzH2Server(
       acceptURing <- IO(new IoUring(4096))
 
       loop = for {
-        semRW <- Semaphore[IO](1)
         a <- IOURingChannel.accept(acceptURing, serverSocket)
         (ring_srv, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
@@ -713,7 +712,7 @@ class QuartzH2Server(
 
         //tls_ch <- IO(TLSChannel(sslCtx.get, ch, semRW))
 
-        _ <- IO(TLSChannel(sslCtx.get, ch, semRW))
+        _ <- IO(TLSChannel(sslCtx.get, ch))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
           .flatMap(ch =>
             IO(ch)

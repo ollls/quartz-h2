@@ -113,6 +113,7 @@ class Http2Settings {
       case SettingsTypes.INITIAL_WINDOW_SIZE  => INITIAL_WINDOW_SIZE = value
       case SettingsTypes.MAX_FRAME_SIZE       => MAX_FRAME_SIZE = value
       case SettingsTypes.MAX_HEADER_LIST_SIZE => MAX_HEADER_LIST_SIZE = value
+      case _ => ()
     }
 
   }

@@ -352,8 +352,13 @@ class TLSChannel(val ctx: SSLContext, rch: IOChannel) extends IOChannel {
     result
   }
 
+
+  //testing with light close
+  final def close(): IO[Unit] = rch.close()
+
+
   // close with TLS close_notify
-  final def close(): IO[Unit] = {
+  final def closeNotify(): IO[Unit] = {
     val result = for {
       _ <- IO(f_SSL.engine.getSession().invalidate())
       _ <- f_SSL.closeOutbound()
