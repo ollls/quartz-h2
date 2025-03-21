@@ -71,7 +71,7 @@ public abstract class AbstractIoUringChannel {
      * Closes the socket.
      */
     public void close() {
-        //System.out.println( "AbstractIoUringChannel::close()");
+        System.out.println( this.toString() + " AbstractIoUringChannel::close()");
         if (closed) {
             return;
         }
@@ -210,9 +210,9 @@ public abstract class AbstractIoUringChannel {
         return closed;
     }
 
-    void setClosed(boolean closed) {
-        this.closed = closed;
-    }
+    //void setClosed(boolean closed) {
+    //    this.closed = closed;
+    //}
 
     /**
      * Check if the channel is open.

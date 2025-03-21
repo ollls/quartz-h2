@@ -232,11 +232,10 @@ class IOURingChannel(
     )
   } yield (result)
 
-  /*
-  def close22(): IO[Unit] = for {
+  
+  def closeSync(): IO[Unit] = for {
     _ <- IO.delay(ch1.close())
-    // _ <- IO(ring.ring.close())
-  } yield ()*/
+  } yield ()
 
   def secure() = false
   // used in TLS mode to pass parameter from SNI tls extension

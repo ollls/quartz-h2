@@ -112,7 +112,7 @@ public class IoUring {
                 try {
                     int eventType = handleEventCompletion(cqes, resultBuffer, i);
                     //use the opportunity to close expired connection sitting on the same ring.
-                    handleReadTimeouts(resultBuffer, timeoutMs);
+                    //handleReadTimeouts(resultBuffer, timeoutMs);
 
                     if (eventType == EVENT_TYPE_READ)
                         didReadEverHappen = 1;
@@ -156,29 +156,29 @@ public class IoUring {
     }
 
     private void handleReadTimeouts(ByteBuffer results, long timeoutMs) {
-        int result = results.getInt();
-        int fd = results.getInt();
-        int eventType = results.get();
+        
+        //int result = results.getInt();
+        //int fd = results.getInt();
+        //int eventType = results.get();
 
         for (AbstractIoUringChannel channel : fdToSocket.values()) {
-
-            if (channel == null || channel.isClosed()) {
-                //System.out.println("handleReadTermination: channel not found or closed");
-                return;
+            if (channel == null ) continue;
+            if (channel.isClosed()) {
+                //System.out.println( "deregister: " + channel.toString());
+                deregister(channel);
+                continue;
             }
-
-            //System.out.println("handleReadTermination: channel found");
-             
+            long time = System.nanoTime();
             //all sockets are permanently on ReadWait, process timeout thru Read callbacks
-            if (System.nanoTime() - channel.ts > timeoutMs * 1000000L) {
-               System.out.println( "expired - " + channel.toString() );
-               channel.readHandler().accept(null);
-               //close anyway, if no one wait on read CB
-               channel.close();
+            if (time - channel.ts > timeoutMs * 1000000L) {
+                //System.out.println( "expired - " + channel.toString() );
+                channel.readHandler().accept(null);
+                channel.close();
             } else {
-                //System.out.println( "active");
+                //*** System.out.println( "active");
             }   
         }
+
     }
 
     private int handleEventCompletion(long cqes, ByteBuffer results, int i) {
