@@ -141,35 +141,6 @@ class IOURingChannel(
     }
   }
 
-  /*
-  private def submitAndGetForRead(ring: IoUring, timeOutMs: Long) : Int = {
-    try {
-      lock.lock()
-      submit(ring)
-      var ret = 0
-
-      while {
-        ret = ring.getCqes(timeOutMs)
-        ret == 0
-      } do ()
-
-      ret
-
-    } finally {
-      lock.unlock()
-    }
-  }
-
-  private def tryGetCqes(ring: IoUring, timeOutMs: Long) = {
-    if (lock.tryLock()) {
-      try {
-        ring.getCqes(timeOutMs)
-      } finally {
-        lock.unlock()
-      }
-    }
-  }*/
-
   def readBuffer(
       dst: ByteBuffer,
       timeOut: Int
@@ -206,6 +177,11 @@ class IOURingChannel(
       _ <- IO
         .raiseError(new java.nio.channels.ClosedChannelException)
         .whenA(b1 == null || b1.position == 0)
+
+         //_ <- IO.sleep( (size * 50).nanosecond )  //( 900000.nanosecond )
+        _<- IO.sleep( 700000.nanosecond )
+      //_ <- IO.sleep( 1000.nanosecond )
+
     } yield (b1.position())
   }
 

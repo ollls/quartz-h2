@@ -34,6 +34,7 @@ object HttpRangeRequest {
           .Error(StatusCode.PartialContent)
           .asStream(fs2.io.readInputStream[IO](IO(jstream), BLOCK_SIZE, true).take(minmax._2))
           .hdr("Content-Range", s"bytes ${minmax._1}-${minmax._2}/${file.length()}")
+          .hdr("ETag", "3a64df551425-1603986224")
           .contentType(ContentType.contentTypeFromFileName(file.getName))
     }
   }

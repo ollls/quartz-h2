@@ -405,8 +405,8 @@ class QuartzH2Server(
 
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
-    val nrings = cores / 2 // 12 cores gives 6 rings - around 15% boost over NIO2
-    val h2streams = cores * 4
+    val nrings = 1 // cores / 2 // 12 cores gives 6 rings - around 15% boost over NIO2
+    val h2streams = 99 // cores * 4
     val THREAD_POOL_SIZE = cores - nrings
     // QuartzH2Server.setLoggingLevel( Level.OFF)
     val fjj = new ForkJoinWorkerThreadFactory {
@@ -688,8 +688,6 @@ class QuartzH2Server(
       _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
       _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
 
-      // rings <- Ref[IO].of[Vector[IoUring]](Vector.empty[IoUring])
-
       conId <- Ref[IO].of(0L)
 
       rings <- IoUringTbl(this, nrings)
@@ -708,9 +706,7 @@ class QuartzH2Server(
         ring <- rings.get
 
         ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
-        _  <- IO(ch.ch1.setBuffers( 1024 * 1024, 4 * 1024 * 1024 ))
-
-        //tls_ch <- IO(TLSChannel(sslCtx.get, ch, semRW))
+        _ <- IO(ch.ch1.setBuffers(1024 * 1024, 4 * 1024 * 1024))
 
         f1 <- IO(TLSChannel(sslCtx.get, ch))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
@@ -720,9 +716,10 @@ class QuartzH2Server(
                 doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => {
                   errorHandler(e)
                 })
-              )(ch => { ch._1.close() *> IO.println( "CONNECTION EXIT") *> rings.release(ring) })
+              )(ch => { ch._1.close() *> rings.release(ring) })
               .start
-          ).handleErrorWith( e => errorHandler(e) *> ch.close() *> rings.release(ring))
+          )
+          .handleErrorWith(e => errorHandler(e) *> ch.close() *> rings.release(ring))
       } yield ()
 
       _ <- loop.iterateUntil(_ => shutdownFlag)

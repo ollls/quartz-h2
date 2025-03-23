@@ -11,404 +11,429 @@ import java.util.function.Consumer;
  * Primary interface for creating and working with an {@code io_uring}.
  */
 public class IoUring {
-    private static final int DEFAULT_MAX_EVENTS = 1024;
-    private static final int EVENT_TYPE_ACCEPT = 0;
-    private static final int EVENT_TYPE_READ = 1;
-    private static final int EVENT_TYPE_WRITE = 2;
-    private static final int EVENT_TYPE_CONNECT = 3;
-    private static final int EVENT_TYPE_CLOSE = 4;
-    private static final int EVENT_TYPE_ERROR = -1;
+	private static final int DEFAULT_MAX_EVENTS = 1024;
+	private static final int EVENT_TYPE_ACCEPT = 0;
+	private static final int EVENT_TYPE_READ = 1;
+	private static final int EVENT_TYPE_WRITE = 2;
+	private static final int EVENT_TYPE_CONNECT = 3;
+	private static final int EVENT_TYPE_CLOSE = 4;
+	private static final int EVENT_TYPE_ERROR = -1;
+	private long lastBatchTS;
+	private final long ring;
+	private final int ringSize;
+	private final ConcurrentHashMap<Integer, AbstractIoUringChannel> fdToSocket = new ConcurrentHashMap<>();
+	private Consumer<Exception> exceptionHandler;
+	private boolean closed = false;
+	private final long cqes;
+	private final ByteBuffer resultBuffer;
 
-    private final long ring;
-    private final int ringSize;
-    private final ConcurrentHashMap<Integer, AbstractIoUringChannel> fdToSocket = new ConcurrentHashMap<>();
-    private Consumer<Exception> exceptionHandler;
-    private boolean closed = false;
-    private final long cqes;
-    private final ByteBuffer resultBuffer;
+	/**
+	 * Instantiates a new {@code IoUring} with {@code DEFAULT_MAX_EVENTS}.
+	 */
+	public IoUring() {
+		this(DEFAULT_MAX_EVENTS);
+	}
 
-    /**
-     * Instantiates a new {@code IoUring} with {@code DEFAULT_MAX_EVENTS}.
-     */
-    public IoUring() {
-        this(DEFAULT_MAX_EVENTS);
-    }
+	/**
+	 * Instantiates a new Io uring.
+	 *
+	 * @param ringSize the max events
+	 */
+	public IoUring(int ringSize) {
+		this.ringSize = ringSize;
+		this.ring = IoUring.create(ringSize);
+		this.cqes = IoUring.createCqes(ringSize);
+		this.resultBuffer = ByteBuffer.allocateDirect(ringSize * 17);
+	}
 
-    /**
-     * Instantiates a new Io uring.
-     *
-     * @param ringSize the max events
-     */
-    public IoUring(int ringSize) {
-        this.ringSize = ringSize;
-        this.ring = IoUring.create(ringSize);
-        this.cqes = IoUring.createCqes(ringSize);
-        this.resultBuffer = ByteBuffer.allocateDirect(ringSize * 17);
-    }
+	/**
+	 * Closes the io_uring instance and releases all resources.
+	 * Throws IllegalStateException if already closed.
+	 */
+	public void close() {
+		if (closed) {
+			throw new IllegalStateException("io_uring closed");
+		}
+		closed = true;
+		IoUring.close(ring);
+		IoUring.freeCqes(cqes);
+	}
 
-    /**
-     * Closes the io_uring.
-     */
-    public void close() {
-        if (closed) {
-            throw new IllegalStateException("io_uring closed");
-        }
-        closed = true;
-        IoUring.close(ring);
-        IoUring.freeCqes(cqes);
-    }
+	/**
+	 * Submits all queued I/O operations to the kernel without waiting for completion.
+	 */
+	public void submit() {
+		IoUring.submit(ring);
+	}
 
-    public void submit() {
-        IoUring.submit(ring);
-    }
+	/**
+	 * Takes over the current thread with a loop calling {@code execute()}, until
+	 * closed.
+	 */
+	public void loop() {
+		while (!closed) {
+			execute();
+		}
+	}
 
-    /**
-     * Takes over the current thread with a loop calling {@code execute()}, until
-     * closed.
-     */
-    public void loop() {
-        while (!closed) {
-            execute();
-        }
-    }
+	/**
+	 * Submits all queued I/O operations to the kernel and waits an unlimited amount
+	 * of time for any to complete.
+	 */
+	public int execute() {
+		return doExecute(true);
+	}
 
-    /**
-     * Submits all queued I/O operations to the kernel and waits an unlimited amount
-     * of time for any to complete.
-     */
-    public int execute() {
-        return doExecute(true);
-    }
+	/**
+	 * Submits all queued I/O operations to the kernel and handles any pending
+	 * completion events, returning immediately if none are present.
+	 */
+	public int executeNow() {
+		return doExecute(false);
+	}
 
-    /**
-     * Submits all queued I/O operations to the kernel and handles any pending
-     * completion events, returning immediately
-     * if none are present.
-     */
-    public int executeNow() {
-        return doExecute(false);
-    }
+	/**
+	 * Retrieves completion queue events with the specified timeout.
+	 * @param timeoutMs Timeout in milliseconds to wait for events
+	 * @return Status code: 1 if read event occurred, -1 if timeout, 0 otherwise
+	 */
+	public int getCqes(long timeoutMs) {
+		return doGetCqes(true, timeoutMs);
+	}
 
-    public int getCqes(long timeoutMs) {
-        return doGetCqes(true, timeoutMs);
-    }
+	private int doGetCqes(boolean shouldWait, long timeoutMs) {
+		// not used, but can be usefull if you track reads and writes in different
+		// places
+		int didReadEverHappen = 0;
 
-    private int doGetCqes(boolean shouldWait, long timeoutMs) {
+		if (lastBatchTS == 0)
+			lastBatchTS = System.nanoTime();
 
-        int didReadEverHappen = 0;
+		if (closed) {
+			throw new IllegalStateException("io_uring closed");
+		}
+		try {
+			int count = IoUring.getCqes(ring, resultBuffer, cqes, ringSize, shouldWait, timeoutMs);
+			if (count == 0) {
+				didReadEverHappen = -1;
+				handleReadTimeouts(resultBuffer, timeoutMs);
+			}
+			for (int i = 0; i < count && i < ringSize; i++) {
+				try {
+					int eventType = handleEventCompletion(cqes, resultBuffer, i);
+					// use the opportunity to close expired connection sitting on the same ring.
+					if (eventType == EVENT_TYPE_READ)
+						didReadEverHappen = 1;
 
-        if (closed) {
-            throw new IllegalStateException("io_uring closed");
-        }
-        try {
-            int count = IoUring.getCqes(ring, resultBuffer, cqes, ringSize, shouldWait, timeoutMs);
-            if (count == 0) {
-                didReadEverHappen = -1;
-                //no event tick, run thru all fds in the map, trigger onRead(null) termination call back.
-                handleReadTimeouts(resultBuffer, timeoutMs);
-                //handleReadTermination(resultBuffer);
-            } // timeout or error condition, signal read to break loop
-            for (int i = 0; i < count && i < ringSize; i++) {
-                try {
-                    int eventType = handleEventCompletion(cqes, resultBuffer, i);
-                    //use the opportunity to close expired connection sitting on the same ring.
-                    //handleReadTimeouts(resultBuffer, timeoutMs);
+					if (System.nanoTime() - lastBatchTS > (timeoutMs * 1000000)) {
+						handleReadTimeouts(resultBuffer, timeoutMs);
+						lastBatchTS = System.nanoTime();
+					}
+				} finally {
+					IoUring.markCqeSeen(ring, cqes, i);
+				}
+			}
+		} catch (Exception ex) {
+			if (exceptionHandler != null) {
+				exceptionHandler.accept(ex);
+			}
+		} finally {
+			resultBuffer.clear();
+		}
+		return didReadEverHappen;
+	}
 
-                    if (eventType == EVENT_TYPE_READ)
-                        didReadEverHappen = 1;
+	/**
+	 * Submits queued operations and processes completion events.
+	 * @param shouldWait Whether to wait for events if none are immediately available
+	 * @return Number of processed events or -1 on error
+	 */
+	private int doExecute(boolean shouldWait) {
+		if (closed) {
+			throw new IllegalStateException("io_uring closed");
+		}
+		try {
+			int count = IoUring.submitAndGetCqes(ring, resultBuffer, cqes, ringSize, shouldWait);
+			for (int i = 0; i < count && i < ringSize; i++) {
+				try {
+					handleEventCompletion(cqes, resultBuffer, i);
+				} finally {
+					IoUring.markCqeSeen(ring, cqes, i);
+				}
+			}
+			return count;
+		} catch (Exception ex) {
+			if (exceptionHandler != null) {
+				exceptionHandler.accept(ex);
+			}
+		} finally {
+			resultBuffer.clear();
+		}
+		return -1;
+	}
 
-                } finally {
-                    IoUring.markCqeSeen(ring, cqes, i);
-                }
-            }
-        } catch (Exception ex) {
-            if (exceptionHandler != null) {
-                exceptionHandler.accept(ex);
-            }
-        } finally {
-            resultBuffer.clear();
-        }
-        return didReadEverHappen;
-    }
+	/**
+	 * Checks all registered channels for read timeouts and closes inactive ones.
+	 * Also cleans up closed channels from the registry.
+	 * @param results Buffer containing event results (unused)
+	 * @param timeoutMs Timeout threshold in milliseconds
+	 */
+	private void handleReadTimeouts(ByteBuffer results, long timeoutMs) {
+		for (AbstractIoUringChannel channel : fdToSocket.values()) {
+			if (channel == null)
+				continue;
+			if (channel.isClosed()) {
+				deregister(channel);
+				continue;
+			}
+			long time = System.nanoTime();
 
-    private int doExecute(boolean shouldWait) {
-        if (closed) {
-            throw new IllegalStateException("io_uring closed");
-        }
-        try {
-            int count = IoUring.submitAndGetCqes(ring, resultBuffer, cqes, ringSize, shouldWait);
-            for (int i = 0; i < count && i < ringSize; i++) {
-                try {
-                    handleEventCompletion(cqes, resultBuffer, i);
-                } finally {
-                    IoUring.markCqeSeen(ring, cqes, i);
-                }
-            }
-            return count;
-        } catch (Exception ex) {
-            if (exceptionHandler != null) {
-                exceptionHandler.accept(ex);
-            }
-        } finally {
-            resultBuffer.clear();
-        }
-        return -1;
-    }
+			if (time - channel.ts > timeoutMs * 1000000L) {
+				channel.readHandler().accept(null);
+				channel.close();
+			} else {
+				// channel is still active
+			}
+		}
+	}
 
-    private void handleReadTimeouts(ByteBuffer results, long timeoutMs) {
-        
-        //int result = results.getInt();
-        //int fd = results.getInt();
-        //int eventType = results.get();
+	/**
+	 * Processes a single completion queue event based on its type.
+	 * Handles accept, connect, read, write, and close events.
+	 * @param cqes Native completion queue event set pointer
+	 * @param results Buffer containing event data
+	 * @param i Index of the event to process
+	 * @return The type of event that was processed
+	 */
+	private int handleEventCompletion(long cqes, ByteBuffer results, int i) {
+		int result = results.getInt();
+		int fd = results.getInt();
+		int eventType = results.get();
 
-        for (AbstractIoUringChannel channel : fdToSocket.values()) {
-            if (channel == null ) continue;
-            if (channel.isClosed()) {
-                //System.out.println( "deregister: " + channel.toString());
-                deregister(channel);
-                continue;
-            }
-            long time = System.nanoTime();
-            //all sockets are permanently on ReadWait, process timeout thru Read callbacks
-            if (time - channel.ts > timeoutMs * 1000000L) {
-                //System.out.println( "expired - " + channel.toString() );
-                channel.readHandler().accept(null);
-                channel.close();
-            } else {
-                //*** System.out.println( "active");
-            }   
-        }
+		if (eventType == EVENT_TYPE_ACCEPT) {
+			IoUringServerSocket serverSocket = (IoUringServerSocket) fdToSocket.get(fd);
+			String ipAddress = IoUring.getCqeIpAddress(cqes, i);
+			IoUringSocket socket = serverSocket.handleAcceptCompletion(this, serverSocket, result, ipAddress);
+			if (socket != null) {
+				socket.ts = System.nanoTime();
+				fdToSocket.put(socket.fd(), socket);
+			}
+		} else {
+			AbstractIoUringChannel channel = fdToSocket.get(fd);
+			if (channel == null || channel.isClosed()) {
+				return EVENT_TYPE_ERROR;
+			}
+			try {
+				if (eventType == EVENT_TYPE_CONNECT) {
+					((IoUringSocket) channel).handleConnectCompletion(this, result);
+				} else if (eventType == EVENT_TYPE_READ) {
+					long bufferAddress = results.getLong();
+					ReferenceCounter<ByteBuffer> refCounter = channel.readBufferMap().get(bufferAddress);
+					ByteBuffer buffer = refCounter.ref();
+					if (buffer == null) {
+						throw new IllegalStateException("Buffer already removed");
+					}
+					if (refCounter.deincrementReferenceCount() == 0) {
+						channel.readBufferMap().remove(bufferAddress);
+					}
+					channel.handleReadCompletion(buffer, result);
+				} else if (eventType == EVENT_TYPE_WRITE) {
+					long bufferAddress = results.getLong();
+					ReferenceCounter<ByteBuffer> refCounter = channel.writeBufferMap().get(bufferAddress);
+					ByteBuffer buffer = refCounter.ref();
+					if (buffer == null) {
+						throw new IllegalStateException("Buffer already removed");
+					}
+					if (refCounter.deincrementReferenceCount() == 0) {
+						channel.writeBufferMap().remove(bufferAddress);
+					}
+					channel.handleWriteCompletion(buffer, result);
+				} else if (eventType == EVENT_TYPE_CLOSE) {
+					// System.out.println( "EVENT_TYPE_CLOSE");
+					channel.close();
+					// channel.closeHandler().run();
+					// channel.setClosed(true);
+				}
+			} catch (Exception ex) {
+				if (channel.exceptionHandler() != null) {
+					channel.exceptionHandler().accept(ex);
+				}
+			} finally {
+				if (channel.isClosed() && channel.equals(fdToSocket.get(fd))) {
+					deregister(channel);
+				}
+			}
+		}
+		return eventType;
+	}
 
-    }
+	/**
+	 * Adds a server socket to the io_uring for accepting new connections.
+	 * Registers the server socket in the channel registry.
+	 * @param serverSocket The server socket to queue for accept operations
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring queueAccept(IoUringServerSocket serverSocket) {
+		fdToSocket.put(serverSocket.fd(), serverSocket);
+		IoUring.queueAccept(ring, serverSocket.fd());
+		return this;
+	}
 
-    private int handleEventCompletion(long cqes, ByteBuffer results, int i) {
-        int result = results.getInt();
-        int fd = results.getInt();
-        int eventType = results.get();
+	/**
+	 * Queues a socket for connection to a remote endpoint.
+	 * Registers the socket in the channel registry.
+	 * @param socket The socket to connect
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring queueConnect(IoUringSocket socket) {
+		fdToSocket.put(socket.fd(), socket);
+		IoUring.queueConnect(ring, socket.fd(), socket.ipAddress(), socket.port());
+		return this;
+	}
 
-        if (eventType == EVENT_TYPE_ACCEPT) {
-            IoUringServerSocket serverSocket = (IoUringServerSocket) fdToSocket.get(fd);
-            String ipAddress = IoUring.getCqeIpAddress(cqes, i);
-            IoUringSocket socket = serverSocket.handleAcceptCompletion(this, serverSocket, result, ipAddress);
-            if (socket != null) {
-                socket.ts = System.nanoTime();
-                fdToSocket.put(socket.fd(), socket);
-            }
-        } else {
-            AbstractIoUringChannel channel = fdToSocket.get(fd);
-            if (channel == null || channel.isClosed()) {
-                return EVENT_TYPE_ERROR;
-            }
-            try {
-                if (eventType == EVENT_TYPE_CONNECT) {
-                    ((IoUringSocket) channel).handleConnectCompletion(this, result);
-                } else if (eventType == EVENT_TYPE_READ) {
-                    long bufferAddress = results.getLong();
-                    ReferenceCounter<ByteBuffer> refCounter = channel.readBufferMap().get(bufferAddress);
-                    ByteBuffer buffer = refCounter.ref();
-                    if (buffer == null) {
-                        throw new IllegalStateException("Buffer already removed");
-                    }
-                    if (refCounter.deincrementReferenceCount() == 0) {
-                        channel.readBufferMap().remove(bufferAddress);
-                    }
-                    channel.handleReadCompletion(buffer, result);
-                } else if (eventType == EVENT_TYPE_WRITE) {
-                    long bufferAddress = results.getLong();
-                    ReferenceCounter<ByteBuffer> refCounter = channel.writeBufferMap().get(bufferAddress);
-                    ByteBuffer buffer = refCounter.ref();
-                    if (buffer == null) {
-                        throw new IllegalStateException("Buffer already removed");
-                    }
-                    if (refCounter.deincrementReferenceCount() == 0) {
-                        channel.writeBufferMap().remove(bufferAddress);
-                    }
-                    channel.handleWriteCompletion(buffer, result);
-                } else if (eventType == EVENT_TYPE_CLOSE) {
-                    //System.out.println( "EVENT_TYPE_CLOSE");
-                    channel.close();
-                    //channel.closeHandler().run();
-                    //channel.setClosed(true);
-                }
-            } catch (Exception ex) {
-                if (channel.exceptionHandler() != null) {
-                    channel.exceptionHandler().accept(ex);
-                }
-            } finally {
-                if (channel.isClosed() && channel.equals(fdToSocket.get(fd))) {
-                    deregister(channel);
-                }
-            }
-        }
-        return eventType;
-    }
+	/**
+	 * Queues a read operation on a channel with no offset.
+	 * @param channel The channel to read from
+	 * @param buffer The buffer to read data into
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring queueRead(AbstractIoUringChannel channel, ByteBuffer buffer) {
+		return queueRead(channel, buffer, 0L);
+	}
 
-    /**
-     * Queues a {@link IoUringServerSocket} for an accept operation on the next ring
-     * execution.
-     *
-     * @param serverSocket the server socket
-     * @return this instance
-     */
-    public IoUring queueAccept(IoUringServerSocket serverSocket) {
-        fdToSocket.put(serverSocket.fd(), serverSocket);
-        IoUring.queueAccept(ring, serverSocket.fd());
-        return this;
-    }
+	/**
+	 * Queues a read operation on a channel with specified offset.
+	 * Registers the channel in the registry and tracks the buffer reference.
+	 * @param channel The channel to read from
+	 * @param buffer The direct ByteBuffer to read data into
+	 * @param offset The offset in the file/source to read from
+	 * @return This IoUring instance for method chaining
+	 * @throws IllegalArgumentException if buffer is not direct
+	 */
+	public IoUring queueRead(AbstractIoUringChannel channel, ByteBuffer buffer, long offset) {
+		if (!buffer.isDirect()) {
+			throw new IllegalArgumentException("Buffer must be direct");
+		}
+		fdToSocket.put(channel.fd(), channel);
+		long bufferAddress = IoUring.queueRead(ring, channel.fd(), buffer, buffer.position(),
+				buffer.limit() - buffer.position(), offset);
+		ReferenceCounter<ByteBuffer> refCounter = channel.readBufferMap().get(bufferAddress);
+		if (refCounter == null) {
+			refCounter = new ReferenceCounter<>(buffer);
+			channel.readBufferMap().put(bufferAddress, refCounter);
+		}
+		refCounter.incrementReferenceCount();
+		return this;
+	}
 
-    /**
-     * Queues a {@link IoUringServerSocket} for a connect operation on the next ring
-     * execution.
-     *
-     * @param socket the socket channel
-     * @return this instance
-     */
-    public IoUring queueConnect(IoUringSocket socket) {
-        fdToSocket.put(socket.fd(), socket);
-        IoUring.queueConnect(ring, socket.fd(), socket.ipAddress(), socket.port());
-        return this;
-    }
+	/**
+	 * Queues a write operation on a channel with no offset.
+	 * @param channel The channel to write to
+	 * @param buffer The buffer containing data to write
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring queueWrite(AbstractIoUringChannel channel, ByteBuffer buffer) {
+		return queueWrite(channel, buffer, 0L);
+	}
 
-    /**
-     * Queues {@link IoUringSocket} for a read operation on the next ring execution.
-     *
-     * @param channel the channel
-     * @param buffer  the buffer to read into
-     * @return this instance
-     */
-    public IoUring queueRead(AbstractIoUringChannel channel, ByteBuffer buffer) {
-        return queueRead(channel, buffer, 0L);
-    }
+	/**
+	 * Queues a write operation on a channel with specified offset.
+	 * Registers the channel in the registry and tracks the buffer reference.
+	 * @param channel The channel to write to
+	 * @param buffer The direct ByteBuffer containing data to write
+	 * @param offset The offset in the file/target to write to
+	 * @return This IoUring instance for method chaining
+	 * @throws IllegalArgumentException if buffer is not direct
+	 */
+	public IoUring queueWrite(AbstractIoUringChannel channel, ByteBuffer buffer, long offset) {
+		if (!buffer.isDirect()) {
+			throw new IllegalArgumentException("Buffer must be direct");
+		}
+		fdToSocket.put(channel.fd(), channel);
+		long bufferAddress = IoUring.queueWrite(ring, channel.fd(), buffer, buffer.position(),
+				buffer.limit() - buffer.position(), offset);
+		ReferenceCounter<ByteBuffer> refCounter = channel.writeBufferMap().get(bufferAddress);
+		if (refCounter == null) {
+			refCounter = new ReferenceCounter<>(buffer);
+			channel.writeBufferMap().put(bufferAddress, refCounter);
+		}
+		refCounter.incrementReferenceCount();
+		return this;
+	}
 
-    /**
-     * Queues {@link IoUringSocket} for a read operation on the next ring execution.
-     *
-     * @param channel the channel
-     * @param buffer  the buffer to read into
-     * @param offset  the offset into the file/source of the read; Casted to u64
-     * @return this instance
-     */
-    public IoUring queueRead(AbstractIoUringChannel channel, ByteBuffer buffer, long offset) {
-        if (!buffer.isDirect()) {
-            throw new IllegalArgumentException("Buffer must be direct");
-        }
-        fdToSocket.put(channel.fd(), channel);
-        long bufferAddress = IoUring.queueRead(ring, channel.fd(), buffer, buffer.position(),
-                buffer.limit() - buffer.position(), offset);
-        ReferenceCounter<ByteBuffer> refCounter = channel.readBufferMap().get(bufferAddress);
-        if (refCounter == null) {
-            refCounter = new ReferenceCounter<>(buffer);
-            channel.readBufferMap().put(bufferAddress, refCounter);
-        }
-        refCounter.incrementReferenceCount();
-        return this;
-    }
+	/**
+	 * Queues a close operation for a channel.
+	 * @param channel The channel to close
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring queueClose(AbstractIoUringChannel channel) {
+		// System.out.println( "public IoUring queueClose(AbstractIoUringChannel
+		// channel)");
+		IoUring.queueClose(ring, channel.fd());
+		return this;
+	}
 
-    /**
-     * Queues {@link IoUringSocket} for a write operation on the next ring
-     * execution.
-     *
-     * @param channel the channel
-     * @return this instance
-     */
-    public IoUring queueWrite(AbstractIoUringChannel channel, ByteBuffer buffer) {
-        return queueWrite(channel, buffer, 0L);
-    }
+	/**
+	 * Gets the current exception handler.
+	 * @return The exception handler function
+	 */
+	Consumer<Exception> exceptionHandler() {
+		return exceptionHandler;
+	}
 
-    /**
-     * Queues {@link IoUringSocket} for a write operation on the next ring
-     * execution.
-     *
-     * @param channel the channel
-     * @param offset  the offset into the file/source of the write; Casted to u64
-     * @return this instance
-     */
-    public IoUring queueWrite(AbstractIoUringChannel channel, ByteBuffer buffer, long offset) {
-        if (!buffer.isDirect()) {
-            throw new IllegalArgumentException("Buffer must be direct");
-        }
-        fdToSocket.put(channel.fd(), channel);
-        long bufferAddress = IoUring.queueWrite(ring, channel.fd(), buffer, buffer.position(),
-                buffer.limit() - buffer.position(), offset);
-        ReferenceCounter<ByteBuffer> refCounter = channel.writeBufferMap().get(bufferAddress);
-        if (refCounter == null) {
-            refCounter = new ReferenceCounter<>(buffer);
-            channel.writeBufferMap().put(bufferAddress, refCounter);
-        }
-        refCounter.incrementReferenceCount();
-        return this;
-    }
+	/**
+	 * Sets a handler for exceptions that occur during io_uring operations.
+	 * @param exceptionHandler The exception handler function
+	 * @return This IoUring instance for method chaining
+	 */
+	public IoUring onException(Consumer<Exception> exceptionHandler) {
+		this.exceptionHandler = exceptionHandler;
+		return this;
+	}
 
-    public IoUring queueClose(AbstractIoUringChannel channel) {
-        //System.out.println( "public IoUring queueClose(AbstractIoUringChannel channel)");
-        IoUring.queueClose(ring, channel.fd());
-        return this;
-    }
+	/**
+	 * Removes a channel from the registry when it's no longer needed.
+	 * @param channel The channel to deregister
+	 */
+	void deregister(AbstractIoUringChannel channel) {
+		fdToSocket.remove(channel.fd());
+	}
 
-    /**
-     * Gets the exception handler.
-     *
-     * @return the exception handler
-     */
-    Consumer<Exception> exceptionHandler() {
-        return exceptionHandler;
-    }
+	private static native long create(int maxEvents);
 
-    /**
-     * Sets the handler that is called when an {@code Exception} is caught during
-     * execution.
-     *
-     * @param exceptionHandler the exception handler
-     */
-    public IoUring onException(Consumer<Exception> exceptionHandler) {
-        this.exceptionHandler = exceptionHandler;
-        return this;
-    }
+	private static native void close(long ring);
 
-    /**
-     * Deregister this channel from the ring.
-     *
-     * @param channel the channel
-     */
-    void deregister(AbstractIoUringChannel channel) {
-        fdToSocket.remove(channel.fd());
-    }
+	private static native void submit(long ring);
 
-    private static native long create(int maxEvents);
+	private static native long createCqes(int count);
 
-    private static native void close(long ring);
+	private static native void freeCqes(long cqes);
 
-    private static native void submit(long ring);
+	private static native int submitAndGetCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize,
+			boolean shouldWait);
 
-    private static native long createCqes(int count);
+	private static native int getCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize, boolean shouldWait,
+			long timeoutMs);
 
-    private static native void freeCqes(long cqes);
+	private static native int getCqesBlocking(long ring, ByteBuffer buffer, long cqes, int cqesSize);
 
-    private static native int submitAndGetCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize,
-            boolean shouldWait);
+	private static native String getCqeIpAddress(long cqes, int cqeIndex);
 
-    private static native int getCqes(long ring, ByteBuffer buffer, long cqes, int cqesSize, boolean shouldWait,
-            long timeoutMs);
+	private static native void markCqeSeen(long ring, long cqes, int cqeIndex);
 
-    private static native int getCqesBlocking(long ring, ByteBuffer buffer, long cqes, int cqesSize);
+	private static native void queueAccept(long ring, int serverSocketFd);
 
-    private static native String getCqeIpAddress(long cqes, int cqeIndex);
+	private static native void queueConnect(long ring, int socketFd, String ipAddress, int port);
 
-    private static native void markCqeSeen(long ring, long cqes, int cqeIndex);
+	private static native long queueRead(long ring, int channelFd, ByteBuffer buffer, int bufferPos, int bufferLen,
+			long offset);
 
-    private static native void queueAccept(long ring, int serverSocketFd);
+	private static native long queueWrite(long ring, int channelFd, ByteBuffer buffer, int bufferPos, int bufferLen,
+			long offset);
 
-    private static native void queueConnect(long ring, int socketFd, String ipAddress, int port);
+	private static native void queueClose(long ring, int channelFd);
 
-    private static native long queueRead(long ring, int channelFd, ByteBuffer buffer, int bufferPos, int bufferLen,
-            long offset);
-
-    private static native long queueWrite(long ring, int channelFd, ByteBuffer buffer, int bufferPos, int bufferLen,
-            long offset);
-
-    private static native void queueClose(long ring, int channelFd);
-
-    static {
-        NativeLibraryLoader.load();
-    }
+	static {
+		NativeLibraryLoader.load();
+	}
 }

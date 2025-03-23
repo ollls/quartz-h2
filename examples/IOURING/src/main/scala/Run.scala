@@ -133,7 +133,7 @@ object MyApp extends IOApp {
     case req @ GET -> Root / StringVar(file) =>
       val FOLDER_PATH = "web_root/"
       val FILE = s"$file"
-      val BLOCK_SIZE = 32000
+      val BLOCK_SIZE = 1024*16
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
       } yield (HttpRangeRequest

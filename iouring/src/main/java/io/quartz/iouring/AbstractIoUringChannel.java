@@ -31,10 +31,6 @@ public abstract class AbstractIoUringChannel {
     }
 
     protected void handleReadCompletion(ByteBuffer buffer, int bytesRead) {
-        //if (bytesRead < 0) {
-        //    close();
-        //    return;
-        //}
         this.ts = System.nanoTime();
         if (readHandler() != null) {
             if (bytesRead < 0) { 
@@ -49,11 +45,6 @@ public abstract class AbstractIoUringChannel {
     }
 
     protected void handleWriteCompletion(ByteBuffer buffer, int bytesWritten) {
-        //if (bytesWritten < 0) {
-        //    close();
-        //    return;
-        //}
-        //buffer.position(buffer.position() + bytesWritten);
         this.ts = System.nanoTime();
         if (writeHandler() != null) {
             if (bytesWritten < 0) { 
@@ -71,7 +62,6 @@ public abstract class AbstractIoUringChannel {
      * Closes the socket.
      */
     public void close() {
-        System.out.println( this.toString() + " AbstractIoUringChannel::close()");
         if (closed) {
             return;
         }
