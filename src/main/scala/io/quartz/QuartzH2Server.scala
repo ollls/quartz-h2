@@ -405,10 +405,9 @@ class QuartzH2Server(
 
   def startIoUring(R: HttpRoute): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
-    val nrings = 1 // cores / 2 // 12 cores gives 6 rings - around 15% boost over NIO2
-    val h2streams = 99 // cores * 4
+    val nrings = 1
+    val h2streams = cores * 4
     val THREAD_POOL_SIZE = cores - nrings
-    // QuartzH2Server.setLoggingLevel( Level.OFF)
     val fjj = new ForkJoinWorkerThreadFactory {
       val num = new AtomicInteger();
       def newThread(pool: ForkJoinPool) = {
