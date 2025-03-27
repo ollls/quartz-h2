@@ -119,6 +119,14 @@ class IOURingChannel(
     } yield ()
   }
 
+  /**
+   * Performs an asynchronous write operation using io_uring
+   * @param ring The IOURing entry to use for the operation
+   * @param ch The socket channel to write to
+   * @param bufferDirect The direct ByteBuffer containing data to write
+   * @param cb Callback function to handle the write completion
+   * @return IO[Unit] representing the queued write operation
+   */
   private def ioUringWriteIO(
       ring: IoUringEntry,
       ch: IoUringSocket,
@@ -128,7 +136,7 @@ class IOURingChannel(
     for {
       consumer <- IO(new Consumer[ByteBuffer] {
         override def accept(buffer: ByteBuffer): Unit = {
-          cb(buffer)
+           cb(buffer)
         }
       })
       _ <- ring.queueWrite(consumer, ch, /*toDirectBuffer(*/ bufferDirect)
@@ -168,30 +176,32 @@ class IOURingChannel(
     } yield (Chunk.byteBuffer(b1.flip))
   }
 
-  def write(buffer: ByteBuffer): IO[Int] = {
+  /**
+   * Writes data from a ByteBuffer to the channel, handling partial writes
+   * @param buffer The ByteBuffer containing data to write
+   * @return IO[ByteBuffer] containing the buffer after the write attempt, may have remaining data if write was partial
+   */
+  def writeBuf(buffer: ByteBuffer): IO[ByteBuffer] = {
     for {
-      // _ <- IO(f_wRef.addAndGet(buffer.remaining()))
       b1 <- effectAsyncChannelIO(ring, ch1)((ring, ch1) => ioUringWriteIO(ring, ch1, buffer, _))
         .handleErrorWith(e => IO.raiseError(e))
-      // Check for null buffer or zero bytes written which could indicate a stalled connection
       _ <- IO
         .raiseError(new java.nio.channels.ClosedChannelException)
         .whenA(b1 == null || b1.position == 0)
-
-         //_ <- IO.sleep( (size * 50).nanosecond )  //( 900000.nanosecond )
-        _<- IO.sleep( 700000.nanosecond )
-      //_ <- IO.sleep( 1000.nanosecond )
-
-    } yield (b1.position())
+    } yield (b1)
   }
 
-  def configureSocketTimeouts(): IO[Unit] = IO {
-    // Set a timeout that's appropriate for your application needs
-    // For Wi-Fi connections, shorter timeouts can help detect disconnections faster
-    ch1.setTimeout(5000) // 5 seconds timeout
+  /**
+   * Writes the complete contents of a ByteBuffer to the channel
+   * Will continue writing until the entire buffer is written or an error occurs
+   * @param buffer The ByteBuffer containing data to write
+   * @return IO[Int] number of bytes written
+   */
+  def write(buffer: ByteBuffer): IO[Int] = {
+    for {
+     b <- writeBuf( buffer ).iterateUntil( b1 => b1.remaining() <= 0 )
+    } yield( b.position() )
   }
-
-  // configureSocketTimeouts()
 
   def close(): IO[Unit] = for {
     result <- IO.async[Unit](cb =>
