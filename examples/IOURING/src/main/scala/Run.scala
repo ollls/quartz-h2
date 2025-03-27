@@ -133,7 +133,7 @@ object MyApp extends IOApp {
     case req @ GET -> Root / StringVar(file) =>
       val FOLDER_PATH = "web_root/"
       val FILE = s"$file"
-      val BLOCK_SIZE = 1024*16
+      val BLOCK_SIZE = 16000
       for {
         jpath <- IO(new java.io.File(FOLDER_PATH + FILE))
       } yield (HttpRangeRequest
@@ -172,6 +172,7 @@ object MyApp extends IOApp {
         "password"
       )
       exitCode <- new QuartzH2Server(
+        //"localhost",
         "10.0.0.6",
         8443,
         12000,
