@@ -34,8 +34,6 @@ object Http2Connection {
       // _ <- Logger[IO].trace( "packet is about to send")
       res <- if (bb == null) IO(true) else IO(false)
       _ <- ch.write(bb).whenA(res == false)
-      //_ <- IO.sleep( (size * 50).nanosecond )  //( 900000.nanosecond )
-      //_ <- IO.sleep(900000.nanoseconds)
       _ <- Logger[IO]
         .debug("Shutdown outbound H2 packet sender")
         .whenA(res == true)
@@ -64,7 +62,7 @@ object Http2Connection {
       terminateWrite <- Ref[IO].of(false)
 
       globalTransmitWindow <- Ref[IO].of[Long](
-        65535
+        65535L
       ) // (default_server_settings.INITIAL_WINDOW_SIZE)
       globalInboundWindow <- Ref[IO].of(
         65535L

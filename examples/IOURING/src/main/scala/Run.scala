@@ -36,7 +36,7 @@ object MyApp extends IOApp {
       )
     )
 
-  var HOME_DIR = "/Users/ostrygun/" // last slash is important!
+  var HOME_DIR = "/home/ols/web_root/" // last slash is important!
 
   val R: HttpRouteIO = {
     case req @ GET -> Root / "ldt" =>
@@ -177,7 +177,7 @@ object MyApp extends IOApp {
         8443,
         12000,
         Some(ctx)
-      ) // , incomingWinSize = 1000000)
+      , incomingWinSize = 1024 * 256)
         .iouring_startIO(R, filter)
 
     } yield (exitCode)
