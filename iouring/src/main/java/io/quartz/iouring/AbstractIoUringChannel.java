@@ -30,6 +30,15 @@ public abstract class AbstractIoUringChannel {
         this.fd = fd;
     }
 
+    /**
+     * Handles the completion of a read operation.
+     * Updates the last activity timestamp and processes the read buffer.
+     * If bytes read is negative, closes the channel and notifies the read handler with null.
+     * Otherwise, updates the buffer position and notifies the read handler with the buffer.
+     *
+     * @param buffer    the buffer containing the read data
+     * @param bytesRead the number of bytes read, negative if error
+     */
     protected void handleReadCompletion(ByteBuffer buffer, int bytesRead) {
         this.ts = System.nanoTime();
         if (readHandler() != null) {
@@ -44,6 +53,15 @@ public abstract class AbstractIoUringChannel {
         }
     }
 
+    /**
+     * Handles the completion of a write operation.
+     * Updates the last activity timestamp and processes the write buffer.
+     * If bytes written is negative, closes the channel and notifies the write handler with null.
+     * Otherwise, updates the buffer position and notifies the write handler with the buffer.
+     *
+     * @param buffer       the buffer containing the written data
+     * @param bytesWritten the number of bytes written, negative if error
+     */
     protected void handleWriteCompletion(ByteBuffer buffer, int bytesWritten) {
         this.ts = System.nanoTime();
         if (writeHandler() != null) {

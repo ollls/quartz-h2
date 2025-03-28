@@ -3,7 +3,7 @@ import Dependencies._
 import scala.sys.process._
 
 ThisBuild / scalaVersion := "3.3.3"
-ThisBuild / version := "0.9-RC"
+ThisBuild / version := "0.9-RC3"
 ThisBuild / organization := "io.github.ollls"
 ThisBuild / organizationName := "ollls"
 ThisBuild / versionScheme := Some("early-semver")
@@ -114,10 +114,6 @@ lazy val IOURING_LIB = (project in file("iouring"))
   .settings(
     organization := "io.github.ollls",
     name := "iouring-quartz-h2",
-    libraryDependencies ++= Seq(
-      "org.eclipse.collections" % "eclipse-collections-api" % "11.1.0",
-      "org.eclipse.collections" % "eclipse-collections" % "11.1.0"
-    ),
     // Define the JNI build task
     buildJNI := {
       val sourceDir = baseDirectory.value / "src" / "main" / "native"
