@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quartz H2 - Settings Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        pre {
+            background-color: #f7fafc;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', monospace;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+        /* Content area list styles */
+        .content-area ul, .content-area ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+            list-style-position: outside;
+        }
+        .content-area ul {
+            list-style-type: disc;
+        }
+        .content-area ol {
+            list-style-type: decimal;
+        }
+        .content-area li {
+            margin-bottom: 0.5rem;
+        }
+        /* Navigation list styles - remove bullets */
+        #sidebar-container ul {
+            list-style-type: none;
+            margin-left: 0;
+        }
+        #sidebar-container li {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Left Sidebar -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto content-area">
+                <h1 class="text-3xl font-bold text-blue-600 mb-6 pb-2 border-b border-gray-200">Quartz H2 Server Configuration</h1>
+                
+                <div class="space-y-12">
+                    <!-- Introduction -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Introduction</h2>
+                        <p class="text-gray-700 mb-4">
+                            Quartz H2 provides a highly configurable HTTP/2 server with various settings to optimize performance and behavior. This documentation covers the server configuration parameters, startup options, and best practices for tuning your server deployment.
+                        </p>
+                        <p class="text-gray-700">
+                            The server can be configured through constructor parameters and startup methods, allowing you to customize everything from network settings to connection handling behavior.
+                        </p>
+                    </section>
+
+                    <!-- Server Constructor Parameters -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Server Constructor Parameters</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Core Parameters</h3>
+                            <p class="text-gray-700 mb-4">The QuartzH2Server constructor takes the following parameters:</p>
+                            
+                            <pre><code class="scala">class QuartzH2Server(
+  HOST: String,
+  PORT: Int,
+  h2IdleTimeOutMs: Int,
+  sslCtx: Option[SSLContext],
+  incomingWinSize: Int = 65535,
+  onConnect: Long => IO[Unit] = _ => IO.unit,
+  onDisconnect: Long => IO[Unit] = _ => IO.unit
+)</code></pre>
+                            
+                            <h3 class="text-lg font-medium text-blue-600 mb-2">Parameter Details</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">HOST</h4>
+                                    <p class="text-gray-700">The hostname or IP address to bind the server to. Use <code>"0.0.0.0"</code> to listen on all available network interfaces.</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">PORT</h4>
+                                    <p class="text-gray-700">The port number to listen on. Common values are <code>443</code> for HTTPS/HTTP2 or <code>80</code> for HTTP.</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">h2IdleTimeOutMs</h4>
+                                    <p class="text-gray-700">The idle timeout in milliseconds for HTTP/2 connections. After this period of inactivity, the connection will be closed.</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">sslCtx</h4>
+                                    <p class="text-gray-700">The SSL context for secure connections. Required for HTTP/2 over TLS (h2). This is now an Option[SSLContext], so it can be None for non-secure connections.</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">incomingWinSize</h4>
+                                    <p class="text-gray-700">The initial window size for HTTP/2 flow control. Default is 65535 bytes (64KB).</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">onConnect</h4>
+                                    <p class="text-gray-700">A callback function that is executed when a new connection is established. Receives the connection ID as a parameter. Uses Cats Effect IO for functional effects.</p>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">onDisconnect</h4>
+                                    <p class="text-gray-700">A callback function that is executed when a connection is terminated. Receives the connection ID as a parameter. Uses Cats Effect IO for functional effects.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Advanced Parameters</h3>
+                            
+                            <div class="space-y-4">
+                                <div class="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50">
+                                    <h4 class="font-semibold text-gray-800">incomingWinSize</h4>
+                                    <p class="text-gray-600 mb-2">The initial window size for HTTP/2 flow control in bytes. Default value is 65535 bytes (64KB).</p>
+                                    <p class="text-gray-600 mb-2">This parameter is crucial for HTTP/2 flow control and directly affects how much data a client can send before receiving a WINDOW_UPDATE frame.</p>
+                                    <p class="text-gray-600 mb-2">HTTP/2 uses flow control to prevent a fast sender from overwhelming a slow receiver. The window size determines how many bytes can be in flight before the sender must wait for a WINDOW_UPDATE frame.</p>
+                                    <p class="text-gray-600">Larger values (e.g., 131072 or 262144) can improve performance for high-bandwidth applications but consume more memory. Smaller values provide tighter flow control but may require more frequent window updates.</p>
+                                </div>
+                                
+                                <div class="border-l-4 border-blue-500 pl-4 py-2">
+                                    <h4 class="font-semibold text-gray-800">onConnect</h4>
+                                    <p class="text-gray-600 mb-2">A callback function that is executed when a new connection is established. It receives the connection ID as a Long parameter.</p>
+                                    <p class="text-gray-600 mb-2">Default implementation is <code>_ => IO.unit</code> (does nothing).</p>
+                                    <p class="text-gray-700 mb-2">Example of a connection callback:</p>
+                                    <pre><code class="scala">def onConnect(id: Long) = {
+  Logger[IO].info(s"New connection established - $id")
+}</code></pre>
+                                </div>
+                                
+                                <div class="border-l-4 border-blue-500 pl-4 py-2">
+                                    <h4 class="font-semibold text-gray-800">onDisconnect</h4>
+                                    <p class="text-gray-600 mb-2">A callback function that is executed when a connection is terminated. It receives the connection ID as a Long parameter.</p>
+                                    <p class="text-gray-600 mb-2">Default implementation is <code>_ => IO.unit</code> (does nothing).</p>
+                                    <p class="text-gray-700 mb-2">Example of a disconnection callback:</p>
+                                    <pre><code class="scala">def onDisconnect(id: Long) = {
+  Logger[IO].info(s"Connection terminated - $id")
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Server Startup Methods -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Server Startup Methods</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Available Startup Methods</h3>
+                            <p class="text-gray-700 mb-4">QuartzH2Server provides several methods to start the server with different configurations:</p>
+                            
+                            <h4 class="font-semibold text-gray-800 mb-2">Standard Startup</h4>
+                            <pre><code class="scala">def startIO(
+  pf: HttpRouteIO,                // Routes definition
+  filter: WebFilter = ...,         // Optional request filter
+  sync: Boolean                    // Whether to use synchronous mode
+): IO[ExitCode]</code></pre>
+
+                            <h4 class="font-semibold text-gray-800 mb-2 mt-4">Linux io_uring Mode (Linux-specific)</h4>
+                            <pre><code class="scala">def iouring_startIO(
+  pf: HttpRouteIO,                // Routes definition
+  filter: WebFilter = ...         // Optional request filter
+): IO[ExitCode]</code></pre>
+                                    <p class="text-gray-600 mb-2">Linux-specific method that uses io_uring for improved performance. This leverages Linux's io_uring interface for high-performance I/O operations.</p>
+                                    <p class="text-gray-600 mt-2">The <code>rings</code> parameter specifies the number of io_uring instances to create. This method is only available on Linux systems with io_uring support.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- SSL Configuration -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">SSL Configuration</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Building SSL Context</h3>
+                            <p class="text-gray-700 mb-4">For HTTPS connections, you need to build an SSL context using a keystore file:</p>
+                            
+                            <pre><code class="scala">val sslContextIO = QuartzH2Server.buildSSLContext(
+  protocol = "TLS",
+  JKSkeystore = "path/to/keystore.jks",
+  password = "keystorePassword"
+)</code></pre>
+                            
+                            <p class="text-gray-700 mt-4">You can create a self-signed certificate for development using the keytool utility:</p>
+                            
+                            <pre><code class="bash">keytool -genkeypair -alias server -keyalg RSA -keysize 2048 \
+  -storetype JKS -keystore keystore.jks -validity 365 \
+  -storepass password -keypass password</code></pre>
+                        </div>
+                    </section>
+                    
+                    <!-- Complete Example -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Complete Example</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Server Configuration and Startup</h3>
+                            <p class="text-gray-700 mb-4">Here's a complete example of configuring and starting the server:</p>
+                            
+                            <pre><code class="scala">import cats.effect.{IO, IOApp, ExitCode}
+import io.quartz.QuartzH2Server
+import io.quartz.http2.routes.{Routes, HttpRouteIO, WebFilter}
+import io.quartz.http2.model.{Request, Response}
+import org.typelevel.log4cats.Logger
+import io.quartz.MyLogger._
+
+object ServerApp extends IOApp {
+  
+  // Define connection callbacks
+  def onConnect(id: Long) = {
+    Logger[IO].info(s"New connection established: $id")
+  }
+  
+  def onDisconnect(id: Long) = {
+    Logger[IO].info(s"Connection terminated: $id")
+  }
+  
+  // Define routes
+  val routes: HttpRouteIO = {
+    case GET -> Root / "hello" => 
+      IO.pure(Response.Ok().asText("Hello, World!"))
+  }
+  
+  // Define filter
+  val filter: WebFilter = (request: Request) =>
+    IO.pure(Right(request))
+  
+  def run = {
+    (for {
+      // Build SSL context
+      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      
+      // Create and start server
+      exitCode <- new QuartzH2Server(
+        "localhost",      // Host address
+        8443,             // Port number
+        30000,            // Idle timeout (30 seconds)
+        Some(ctx),        // SSL context (now Option[SSLContext])
+        131072,           // Window size (128KB)
+        onConnect,        // Connection callback
+        onDisconnect      // Disconnection callback
+      ).startIO(routes, filter, sync = false)
+    } yield exitCode)
+  }
+}</code></pre>
+                        </div>
+                    </section>
+                    
+                    <!-- Performance Tuning -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Performance Tuning</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Performance Tuning</h3>
+                            <p class="text-gray-700 mb-4">Quartz H2 can be tuned for optimal performance based on your specific workload and hardware:</p>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">Window Size Tuning</h4>
+                                    <ul class="list-disc pl-5 space-y-1 mb-4">
+                                        <li>For high-bandwidth applications, increase <code>incomingWinSize</code> to 131072 (128KB) or 262144 (256KB)</li>
+                                        <li>For memory-constrained environments, keep the default of 65535 (64KB)</li>
+                                        <li>For very high throughput scenarios, consider values up to 1048576 (1MB)</li>
+                                    </ul>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">Connection Mode Selection</h4>
+                                    <ul class="list-disc pl-5 space-y-1 mb-4">
+                                        <li>For most applications, use asynchronous mode (<code>sync = false</code>)</li>
+                                        <li>On Linux, consider using <code>startIO_linuxOnly</code> for better performance</li>
+                                        <li>Synchronous mode (<code>sync = true</code>) may be simpler for debugging but offers lower concurrency</li>
+                                    </ul>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">Idle Timeout Configuration</h4>
+                                    <ul class="list-disc pl-5 space-y-1 mb-4">
+                                        <li>For interactive applications, set <code>h2IdleTimeOutMs</code> to 30000-60000 (30-60 seconds)</li>
+                                        <li>For API servers, lower values like 10000-20000 (10-20 seconds) may be appropriate</li>
+                                        <li>For long-lived connections, consider values up to 300000 (5 minutes)</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>

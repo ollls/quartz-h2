@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quartz H2 - Routes DSL Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        pre {
+            background-color: #f7fafc;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', monospace;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+        /* Content area list styles */
+        .content-area ul, .content-area ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+            list-style-position: outside;
+        }
+        .content-area ul {
+            list-style-type: disc;
+        }
+        .content-area ol {
+            list-style-type: decimal;
+        }
+        .content-area li {
+            margin-bottom: 0.5rem;
+        }
+        /* Navigation list styles - remove bullets */
+        #sidebar-container ul {
+            list-style-type: none;
+            margin-left: 0;
+        }
+        #sidebar-container li {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Left Sidebar -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto content-area">
+                <h1 class="text-3xl font-bold text-blue-600 mb-6 pb-2 border-b border-gray-200">Quartz H2 Routes DSL</h1>
+                
+                <div class="space-y-12">
+                    <!-- Introduction -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Introduction</h2>
+                        <p class="text-gray-700 mb-4">
+                            Quartz H2 provides a powerful and expressive DSL (Domain Specific Language) for defining HTTP routes in a type-safe and functional manner. This documentation covers all aspects of the Routes DSL, from basic path matching to advanced query parameter extraction.
+                        </p>
+                        <p class="text-gray-700">
+                            The Routes DSL is designed to work seamlessly with Cats Effect IO, allowing you to leverage Cats Effect's powerful effect system for handling HTTP requests and responses.
+                        </p>
+                    </section>
+
+                    <!-- Core Concepts -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Core Concepts</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Route Types</h3>
+                            <p class="text-gray-700 mb-4">Quartz H2 defines several key types for working with HTTP routes:</p>
+                            
+                            <div class="space-y-4">
+                                <div class="border-l-4 border-blue-500 pl-4 py-2">
+                                    <h4 class="font-semibold text-gray-800">HttpRoute</h4>
+                                    <p class="text-gray-700 mb-2">The main route type, representing a function that takes a request and returns an IO effect that may produce a response.</p>
+                                    <pre><code class="text-sm">type HttpRoute = Request => IO[Option[Response]]</code></pre>
+                                </div>
+                                
+                                <div class="border-l-4 border-blue-500 pl-4 py-2">
+                                    <h4 class="font-semibold text-gray-800">WebFilter</h4>
+                                    <p class="text-gray-700 mb-2">A function that takes a request and returns an IO effect that may transform the request or reject it with a response.</p>
+                                    <pre><code class="text-sm">type WebFilter = Request => IO[Either[Response, Request]]</code></pre>
+                                </div>
+                                
+                                <div class="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50">
+                                    <h4 class="font-semibold text-gray-800">HttpRouteIO</h4>
+                                    <p class="text-gray-700 mb-2">A partial function that maps requests to IO effects producing responses. Used for pattern matching on requests.</p>
+                                    <pre><code class="text-sm">type HttpRouteIO = PartialFunction[Request, IO[Response]]</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Creating Routes</h3>
+                            <p class="text-gray-700 mb-4">Routes are created using the <code>Routes.of</code> method, which takes a route definition and a filter:</p>
+                            
+                            <pre><code class="text-sm">// Define a route with a filter
+val route = Routes.of(
+  pf = {
+    case GET -> Root => IO(Response.Ok())
+    case GET -> Root / "hello" => IO(Response.Ok().asText("Hello World!"))
+  },
+  filter = (r: Request) => IO(Right(r)) // Simple pass-through filter
+)</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Path Matching -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Path Matching</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Basic Path Matching</h3>
+                            <p class="text-gray-700 mb-4">The Routes DSL provides pattern matching for HTTP paths using the <code>/</code> extractor:</p>
+                            
+                            <pre><code class="text-sm">// Match the root path
+case GET -> Root => IO(Response.Ok())
+
+// Match a single path segment
+case GET -> Root / "users" => IO(Response.Ok().asText("All users"))
+
+// Match multiple path segments
+case GET -> Root / "users" / "profile" => IO(Response.Ok().asText("User profile"))</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Path Variables</h3>
+                            <p class="text-gray-700 mb-4">Extract values from path segments using built-in extractors:</p>
+                            
+                            <div class="space-y-6">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">Integer Path Variables</h4>
+                                    <pre><code class="text-sm">// Extract an integer from the path
+case GET -> Root / "users" / IntVar(userId) => 
+  IO(Response.Ok().asText(s"User ID: $userId"))</code></pre>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">Long Path Variables</h4>
+                                    <pre><code class="text-sm">// Extract a long from the path
+case GET -> Root / "posts" / LongVar(postId) => 
+  IO(Response.Ok().asText(s"Post ID: $postId"))</code></pre>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">UUID Path Variables</h4>
+                                    <pre><code class="text-sm">// Extract a UUID from the path
+case GET -> Root / "sessions" / UUIDVar(sessionId) => 
+  IO(Response.Ok().asText(s"Session ID: $sessionId"))</code></pre>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">String Path Variables</h4>
+                                    <pre><code class="text-sm">// Extract a string from the path
+case GET -> Root / "users" / StringVar(username) => 
+  IO(Response.Ok().asText(s"Username: $username"))</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Advanced Path Matching</h3>
+                            
+                            <div class="space-y-6">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">Matching Path Prefixes</h4>
+                                    <p class="text-gray-600 mb-2">The <code>/:</code> extractor allows you to match a path prefix and extract the remaining path:</p>
+                                    <pre><code class="text-sm">// Match a path prefix and extract the remaining path
+case req @ GET -> "api" /: remainingPath => 
+  IO(Response.Ok().asText(remainingPath.toString()))</code></pre>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-semibold text-gray-800 mb-2">Matching from Root</h4>
+                                    <p class="text-gray-600 mb-2">The <code>/^</code> extractor allows you to match from the root and extract the entire path:</p>
+                                    <pre><code class="text-sm">// Match from root and extract the entire path
+case GET -> /^(Root, path) => 
+  IO(Response.Ok().asText(s"Full path: $path"))</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Query Parameters -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Query Parameters</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Extracting Query Parameters</h3>
+                            <p class="text-gray-700 mb-4">The <code>:?</code> extractor allows you to extract query parameters from a request:</p>
+                            
+                            <pre><code class="text-sm">// Define a query parameter extractor
+val name = new QueryParam("name")
+
+// Extract a query parameter
+case GET -> Root / "hello" :? name(userName) => 
+  IO(Response.Ok().asText(s"Hello, ${if(userName.isEmpty) "World" else userName}!"))</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Multiple Query Parameters</h3>
+                            <p class="text-gray-700 mb-4">You can extract multiple query parameters by chaining the <code>:?</code> extractor:</p>
+                            
+                            <pre><code class="text-sm">// Define query parameter extractors
+val name = new QueryParam("name")
+val age = new QueryParam("age")
+val sort = new QueryParam("sort")
+// Extract multiple query parameters
+case GET -> Root / "users" :? name(userName) :? age(userAge) => 
+  IO(Response.Ok().asText(s"Name: $userName, Age: $userAge"))</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- HTTP Methods -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">HTTP Methods</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Matching HTTP Methods</h3>
+                            <p class="text-gray-700 mb-4">The Routes DSL supports matching on HTTP methods using pattern matching:</p>
+                            
+                            <pre><code class="text-sm">// GET request
+case GET -> Root / "users" => IO(Response.Ok().asText("Get all users"))
+
+// POST request
+case POST -> Root / "users" => IO(Response.Created().asText("User created"))
+
+// PUT request
+case PUT -> Root / "users" / IntVar(id) => IO(Response.Ok().asText(s"User $id updated"))
+
+// DELETE request
+case DELETE -> Root / "users" / IntVar(id) => IO(Response.Ok().asText(s"User $id deleted"))
+
+// PATCH request
+case PATCH -> Root / "users" / IntVar(id) => IO(Response.Ok().asText(s"User $id partially updated"))
+
+// OPTIONS request
+case OPTIONS -> Root / "users" => IO(Response.Ok().asText("Available methods: GET, POST, PUT, DELETE"))</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Web Filters -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Web Filters</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Creating Web Filters</h3>
+                            <p class="text-gray-700 mb-4">Web filters allow you to intercept and modify requests before they reach your routes, or short-circuit the request handling by returning a response directly:</p>
+                            
+                            <pre><code class="text-sm">// Simple pass-through filter
+val passThrough: WebFilter[Any] = (r: Request) => 
+  IO(Right(r))
+
+// Authentication filter
+val authFilter: WebFilter = (r: Request) => {
+  val authHeader = r.headers.get("Authorization")
+  if (authHeader.isDefined && authHeader.get.startsWith("Bearer ")) {
+    IO(Right(r))
+  } else {
+    IO(Left(Response.Error(StatusCode.Unauthorized).asText("Unauthorized")))
+  }
+}
+
+// Logging filter
+val loggingFilter: WebFilter = (r: Request) => {
+  Logger[IO].info(s"Request: ${r.method} ${r.uri}") *> IO(Right(r))
+}</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Combining Filters</h3>
+                            <p class="text-gray-700 mb-4">You can combine multiple filters to create a filter chain:</p>
+                            
+                            <pre><code class="text-sm">// Combine filters
+val combinedFilter: WebFilter = (r: Request) => for {
+    result1 <- loggingFilter(r)
+    result2 <- result1 match {
+      case Right(req) => authFilter(req)
+      case Left(resp) => IO(Left(resp))
+    }
+  } yield result2</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Understanding Routes.of -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Understanding Routes.of</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Function Lifting</h3>
+                            <p class="text-gray-700 mb-4">The <code>Routes.of</code> function is the core mechanism for creating routes in Quartz H2 with Cats Effect IO. It performs a critical transformation:</p>
+                            
+                            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+                                <h4 class="font-semibold text-gray-800">Function Lifting</h4>
+                                <p class="text-gray-700">Routes.of <strong>lifts</strong> your partial function (<code>HttpRouteIO</code> or <code>HttpRouteRIO[Env]</code>) into a total function (<code>HttpRoute</code>) by handling the cases where your partial function is not defined.</p>
+                                <p class="text-gray-700 mt-2">This lifting process transforms:</p>
+                                <pre><code class="text-sm">// Simplified implementation of Routes.of
+def of(pf: HttpRouteIO, filter: WebFilter): HttpRoute = {
+  val route = (request: Request) =>
+    pf.lift(request) match {
+      case Some(c) => c.flatMap(r => IO(Some(r)))
+      case None    => IO(None)
+    }
+  (r0: Request) =>
+    filter(r0).flatMap {
+      case Right(request) => route(request)
+      case Left(response) =>
+        Logger[IO].error(s"Web filter denied access with response code ${response.code}") >> IO(Some(response))
+    }
+}</code></pre>
+                            </div>
+                            
+                            <div class="bg-green-50 border-l-4 border-green-500 p-4 mt-6">
+                                <h4 class="font-semibold text-gray-800">Key Benefits</h4>
+                                <ul class="list-disc pl-5 space-y-1 text-gray-700">
+                                    <li><strong>Simplicity:</strong> You only need to define the routes you care about using pattern matching</li>
+                                    <li><strong>Type Safety:</strong> The compiler ensures your route handlers return the correct types</li>
+                                    <li><strong>Composition:</strong> Multiple partial functions can be combined using <code>orElse</code></li>
+                                    <li><strong>Filtering:</strong> WebFilters are applied before route matching, allowing for pre-processing and security checks</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mt-6">
+                                <h4 class="font-semibold text-gray-800">Composing Routes with orElse</h4>
+                                <p class="text-gray-700 mb-3">One of the powerful features of partial functions is that they can be composed using <code>orElse</code>. This allows you to organize your routes into logical groups and combine them:</p>
+                                
+                                <pre><code class="text-sm">// User-related routes
+val userRoutes: HttpRouteIO = {
+  case GET -> Root / "users" => 
+    IO(Response.Ok().asText("List of users"))
+  case GET -> Root / "users" / IntVar(id) => 
+    IO(Response.Ok().asText(s"User details for ID: $id"))
+}
+
+// Product-related routes
+val productRoutes: HttpRouteIO = {
+  case GET -> Root / "products" => 
+    IO(Response.Ok().asText("List of products"))
+  case GET -> Root / "products" / IntVar(id) => 
+    IO(Response.Ok().asText(s"Product details for ID: $id"))
+}
+
+// Admin routes with different environment requirement using ReaderT
+case class AdminEnv(adminService: AdminService)
+
+val adminRoutes: HttpRouteRIO[AdminEnv] = {
+  case GET -> Root / "admin" / "dashboard" => 
+    for {
+      env <- RIO.ask[AdminEnv]
+      data <- RIO.liftIO(env.adminService.getDashboardData)
+    } yield Response.Ok().asText(s"Admin dashboard: $data")
+}
+
+// Combine routes - note that they can have different environment requirements
+val combinedRoutes = userRoutes.orElse(productRoutes)
+
+// Create the final HttpRoute with a filter
+val routes = Routes.of(
+  pf = combinedRoutes,
+  filter = (r: Request) => IO(Right(r))
+)
+
+// Admin routes would be provided separately with their required environment
+val env = AdminEnv(new AdminService())
+val adminHttpRoutes = Routes.of(env, adminRoutes, (r: Request) => IO(Right(r)))</code></pre>
+                                
+                                <p class="text-gray-700 mt-3">This approach allows you to:</p>
+                                <ul class="list-disc pl-5 space-y-1 text-gray-700">
+                                    <li>Organize routes by feature or resource type</li>
+                                    <li>Reuse route definitions across different parts of your application</li>
+                                    <li>Combine routes with different environment requirements</li>
+                                    <li>Maintain separation of concerns in your codebase</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Complete Example -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Complete Example</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">User Management API</h3>
+                            <p class="text-gray-700 mb-4">Here's a complete example of a user management API using the Routes DSL:</p>
+                            
+                            <pre><code class="text-sm">import cats.effect.IO
+import io.quartz.http2.model.{Request, Response, Headers, StatusCode, Method}
+import io.quartz.http2.routes.Routes
+import io.quartz.http2._
+
+object UserApi {
+  // Query parameter extractors
+  val name = new QueryParam("name")
+  val age = new QueryParam("age")
+  val sort = new QueryParam("sort")
+  
+  // Simple authentication filter
+  val authFilter: WebFilter = (r: Request) => {
+    val authHeader = r.headers.get("Authorization")
+    if (authHeader.isDefined && authHeader.get.startsWith("Bearer ")) {
+      IO(Right(r))
+    } else {
+      IO(Left(Response.Error(StatusCode.Unauthorized).asText("Unauthorized")))
+    }
+  }
+  
+  // Define routes
+  val routes = Routes.of(
+    pf = {
+      // Get all users with optional filtering and sorting
+      case GET -> Root / "users" :? name(userName) :? age(userAge) :? sort(sortBy) =>
+        IO(Response.Ok().asText(
+          s"Users filtered by name: $userName, age: $userAge, sorted by: $sortBy"
+        ))
+      
+      // Get user by ID
+      case GET -> Root / "users" / IntVar(userId) =>
+        IO(Response.Ok().asText(s"User details for ID: $userId"))
+      
+      // Create new user
+      case POST -> Root / "users" =>
+        IO(Response.Created().asText("User created successfully"))
+      
+      // Update user
+      case PUT -> Root / "users" / IntVar(userId) =>
+        IO(Response.Ok().asText(s"User $userId updated successfully"))
+      
+      // Delete user
+      case DELETE -> Root / "users" / IntVar(userId) =>
+        IO(Response.Ok().asText(s"User $userId deleted successfully"))
+      
+      // User profile section
+      case GET -> Root / "users" / IntVar(userId) / "profile" =>
+        IO(Response.Ok().asText(s"Profile for user $userId"))
+      
+      // User settings section with UUID
+      case GET -> Root / "users" / IntVar(userId) / "settings" / UUIDVar(settingId) =>
+        IO(Response.Ok().asText(s"Setting $settingId for user $userId"))
+      
+      // Fallback for unmatched routes
+      case _ =>
+        IO(Response.Error(StatusCode.NotFound).asText("Route not found"))
+    },
+    filter = authFilter
+  )
+}</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Real-World Examples -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Real-World Examples</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Path Prefix Extraction</h3>
+                            <p class="text-gray-700 mb-4">Extract and use the remaining path after a prefix:</p>
+                            
+                            <pre><code class="text-sm">// Match a path prefix and extract the remaining path
+case req @ GET -> "pub" /: remaining_path =>
+  IO(Response.Ok().asText(remaining_path.toString()))</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Headers and Cookies</h3>
+                            <p class="text-gray-700 mb-4">Set custom headers and cookies in your responses:</p>
+                            
+                            <pre><code class="text-sm">// Set custom headers and cookies
+case GET -> Root / "hello" / "user" / StringVar(userId) :? param1(par) =>
+  val headers = Headers("procid" -> "header_value_from_server", "content-type" -> ContentType.Plain.toString)
+  val c1 = Cookie("testCookie1", "ABCD", secure = true)
+  val c2 = Cookie("testCookie2", "ABCDEFG", secure = false)
+  val c3 = Cookie("testCookie3", "1A8BD0FC645E0", secure = false, expires = Some(java.time.ZonedDateTime.now.plusHours(5)))
+  IO(Response.Ok().hdr(headers).cookie(c1).cookie(c2).cookie(c3).asText(s"$userId with para1 $par"))</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Server Name Indication (SNI) Matching</h3>
+                            <p class="text-gray-700 mb-4">Match routes based on the SNI hostname from TLS:</p>
+                            <pre><code class="text-sm">// Match based on SNI hostname
+case "localhost" ! GET -> Root / "example" =>
+  // Send data in separate H2 packets of various size
+  val ts = Stream.emits("Block1\n".getBytes())
+  val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
+  IO(Response.Ok().asStream(ts2))</code></pre>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">HTTP Range Requests</h3>
+                            <p class="text-gray-700 mb-4">Support for HTTP Range requests, useful for video streaming:</p>
+                            
+                            <pre><code class="text-sm">// HTTP Range requests for video streaming
+case req @ GET -> Root / StringVar(file) =>
+  val FOLDER_PATH = "videos/"
+  val FILE = s"$file"
+  val BLOCK_SIZE = 32000
+  for {
+    jpath <- IO.attempt(new java.io.File(FOLDER_PATH + FILE))
+  } yield (HttpRangeRequest.makeResponse(req, jpath, ContentType.Video_MP4, BLOCK_SIZE))</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Advanced Filters -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Advanced Filters</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Path-Based Filtering with Header Injection</h3>
+                            <p class="text-gray-700 mb-4">Filter requests based on path and add custom headers to valid requests:</p>
+                            
+                            <pre><code class="text-sm">val filter: WebFilter = (request: Request) =>
+  IO(
+    Either.cond(
+      !request.uri.getPath().endsWith("na.txt"),
+      request.hdr("test_tid" -> "ABC123Z9292827"),
+      Response.Error(StatusCode.Forbidden).asText("Denied: " + request.uri.getPath())
+    )
+  )</code></pre>
+                            <p class="text-gray-700 mt-4">This filter:</p>
+                            <ul class="list-disc pl-5 space-y-1 text-gray-700">
+                                <li>Rejects requests ending with "na.txt" with a 403 Forbidden response</li>
+                                <li>For all other requests, adds a custom header "test_tid" with value "ABC123Z9292827"</li>
+                                <li>Uses Either.cond for clean, functional conditional logic</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Serving Static Files</h3>
+                            <p class="text-gray-700 mb-4">Serve static files from the filesystem with proper content type detection:</p>
+                            
+                            <pre><code class="text-sm">// Serve a file
+case req @ GET -> Root / StringVar(file) =>
+  val FOLDER_PATH = "/home/ols/web_root/"
+  val FILE = s"$file"
+  val BLOCK_SIZE = 1024 * 14
+  for {
+    jpath <- IO.attempt(new java.io.File(FOLDER_PATH + FILE))
+    present <- IO.attempt(jpath.exists())
+    _ <- IO.raiseWhen(!present)(new java.io.FileNotFoundException(jpath.toString()))
+  } yield (Response
+    .Ok()
+    .asStream(fs2.io.readInputStream(IO(new java.io.FileInputStream(jpath)), BLOCK_SIZE, true))
+    .contentType(ContentType.contentTypeFromFileName(FILE)))</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Best Practices -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Best Practices</h2>
+                        
+                        <div class="bg-white shadow-md rounded-lg p-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Route Organization</h3>
+                            
+                            <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                                <li><strong>Group related routes:</strong> Organize routes by functionality or resource type.</li>
+                                <li><strong>Use filters effectively:</strong> Apply filters for cross-cutting concerns like authentication, logging, and error handling.</li>
+                                <li><strong>Handle errors gracefully:</strong> Use ZIO's error handling capabilities to manage exceptions.</li>
+                                <li><strong>Validate input:</strong> Validate path variables and query parameters before processing.</li>
+                                <li><strong>Use meaningful status codes:</strong> Return appropriate HTTP status codes for different scenarios.</li>
+                                <li><strong>Document your API:</strong> Provide clear documentation for your routes and their expected inputs and outputs.</li>
+                                <li><strong>Test your routes:</strong> Write tests for your routes to ensure they behave as expected.</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+    </script>
+</body>
+</html>

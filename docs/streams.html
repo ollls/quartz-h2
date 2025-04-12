@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quartz H2 - Streaming Integration</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Left Sidebar and Main Content Container -->
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left Sidebar -->
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto">
+                <h1 class="text-3xl font-bold text-blue-600 mb-6 pb-2 border-b border-gray-200">Quartz H2 Streaming Integration</h1>
+
+                <!-- Introduction -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">FS2 Streams and Quartz H2: A Powerful Integration</h2>
+                    
+                    <p class="text-gray-700 mb-6">
+                        Quartz H2 seamlessly integrates with Cats Effect's FS2 streaming ecosystem, providing a reactive, high-performance HTTP/2 server with sophisticated flow control and backpressure mechanisms. This integration offers significant advantages for building modern, resource-efficient web applications.
+                    </p>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <h3 class="font-semibold text-gray-800 mb-2">Key Benefits</h3>
+                        <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                            <li><strong>End-to-End Backpressure:</strong> Complete backpressure chain from the network socket to your application logic</li>
+                            <li><strong>Reactive Flow Control:</strong> Adaptive system that responds to application processing capabilities in real-time</li>
+                            <li><strong>Resource Efficiency:</strong> Optimal memory and CPU utilization even under variable load conditions</li>
+                            <li><strong>Non-Blocking Operations:</strong> Leverages Cats Effect's concurrency primitives for maximum throughput without resource exhaustion</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- FS2 Stream Examples from Run.scala -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">FS2 Stream Examples from Run.scala</h2>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">File Upload with FS2 Stream</h3>
+                        <p class="text-gray-700 mb-4">Using FS2 Stream to handle file uploads efficiently:</p>
+                        
+                        <pre><code class="text-sm scala">case req @ POST -> Root / "upload" / StringVar(file) =>
+  val FOLDER_PATH = "/home/ols/web_root/"
+  val FILE = s"$file"
+  for {
+    jpath <- IO.attempt(new java.io.File(FOLDER_PATH + FILE))
+    u <- req.stream.through(fs2.io.file.writeAll[IO](java.nio.file.Paths.get(FOLDER_PATH + FILE))).compile.drain
+  } yield (Response.Ok().asText("OK"))</code></pre>
+                    </div>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">Counting Stream Bytes</h3>
+                        <p class="text-gray-700 mb-4">Using FS2 Stream to count bytes in a request:</p>
+                        
+                        <pre><code class="text-sm scala">case req @ GET -> Root =>
+  for {
+    x <- req.stream.compile.count
+  } yield (Response.Ok().asText(s"OK bytes received: $x"))</code></pre>
+                    </div>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">Collecting Stream Data</h3>
+                        <p class="text-gray-700 mb-4">Using FS2 Stream to collect all data from a request:</p>
+                        
+                        <pre><code class="text-sm scala">case req @ POST -> Root =>
+  for {
+    bytes <- req.stream.compile.toList
+    data = bytes.toArray
+  } yield (Response.Ok().asText("OK:" + new String(data)))</code></pre>
+                    </div>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">Draining a Stream</h3>
+                        <p class="text-gray-700 mb-4">Using FS2 Stream to properly drain incoming data:</p>
+                        
+                        <pre><code class="text-sm scala">case req @ GET -> Root / "snihost" =>
+  for {
+    _ <- req.stream.compile.drain // properly ignore incoming data, we must flush it
+    result_text <- IO.attempt(req.sniServerNames match {
+      case Some(hosts) => s"Host names in TLS SNI extension: ${hosts.mkString(",")}"
+      case None        => "No TLS SNI host names provided or unsecure connection"
+    })
+  } yield (Response.Ok().asText(result_text))</code></pre>
+                    </div>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">Streaming Response with Custom Chunks</h3>
+                        <p class="text-gray-700 mb-4">Creating a stream from custom chunks for response:</p>
+                        
+                        <pre><code class="text-sm scala">case "localhost" ! GET -> Root / "example" =>
+  // how to send data in separate H2 packets of various size.
+  val ts = Stream.emits("Block1\n".getBytes())
+  val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
+  IO(Response.Ok().asStream(ts2))</code></pre>
+                    </div>
+                    
+                    <div class="bg-white shadow-md rounded-lg p-6">
+                        <h3 class="text-xl font-medium text-blue-600 mb-3">Streaming File Response</h3>
+                        <p class="text-gray-700 mb-4">Using FS2 Stream to efficiently serve file contents:</p>
+                        
+                        <pre><code class="text-sm scala">case GET -> Root / StringVar(file) =>
+  val FOLDER_PATH = "/home/ols/web_root/"
+  val FILE = s"$file"
+  val BLOCK_SIZE = 1024 * 14
+  for {
+    jpath <- IO.attempt(new java.io.File(FOLDER_PATH + FILE))
+    present <- IO.attempt(jpath.exists())
+    _ <- IO.raiseWhen(!present)(new java.io.FileNotFoundException(jpath.toString()))
+  } yield (Response
+    .Ok()
+    .asStream(fs2.io.readInputStream(IO(new java.io.FileInputStream(jpath)), BLOCK_SIZE, true))
+    .contentType(ContentType.contentTypeFromFileName(FILE)))</code></pre>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+    </script>
+</body>
+</html>

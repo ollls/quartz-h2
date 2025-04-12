@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cats Effect IO for IoUring - Quartz H2</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+        .hero-image {
+            max-height: 180px;
+            object-fit: contain;
+        }
+        code {
+            background-color: #f1f5f9;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f1f5f9;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2563eb;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: #3b82f6;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        h4 {
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: #4b5563;
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            margin-bottom: 1rem;
+        }
+        /* Content area list styles */
+        .content-area ul, .content-area ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+            list-style-position: outside;
+        }
+        .content-area ul {
+            list-style-type: disc;
+        }
+        .content-area ol {
+            list-style-type: decimal;
+        }
+        .content-area li {
+            margin-bottom: 0.5rem;
+        }
+        /* Navigation list styles - remove bullets */
+        #sidebar-container ul {
+            list-style-type: none;
+            margin-left: 0;
+        }
+        #sidebar-container li {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left Sidebar -->
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto content-area">
+                <!-- Header with Logo -->
+                <div class="flex flex-col md:flex-row items-center justify-between mb-8 pb-4 border-b border-gray-200">
+                    <div class="flex items-center mb-4 md:mb-0">
+                        <img src="quartz-h2.jpeg" alt="Quartz H2 Logo" class="hero-image mr-4 rounded-lg shadow-md">
+                        <h1 class="text-3xl font-bold text-blue-600">Cats Effect IO for IoUring</h1>
+                    </div>
+                </div>
+                
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2>Technical Overview</h2>
+
+                    <h3>IoUring Architecture in Quartz H2 Server</h3>
+                    <p>The Quartz H2 Server implements a high-performance, non-blocking I/O system using Linux's io_uring interface wrapped with Cats Effect IO for asynchronous operations. This implementation provides efficient network I/O operations with minimal overhead, leveraging the power of both io_uring and Cats Effect's functional concurrency primitives.</p>
+
+                    <h3>Key Components</h3>
+
+                    <h4>IoUringTbl</h4>
+                    <p>The <code>IoUringTbl</code> class manages a collection of <code>IoUring</code> instances, providing load balancing across multiple rings. Each ring is encapsulated in an <code>IoUringEntry</code> which contains:</p>
+                    <ul>
+                        <li>A bounded queue for task submission</li>
+                        <li>An atomic counter for reference counting</li>
+                        <li>The actual <code>IoUring</code> instance</li>
+                    </ul>
+
+                    <p>The table provides methods to:</p>
+                    <ul>
+                        <li>Get the least used ring based on reference counters</li>
+                        <li>Release a ring when it's no longer needed</li>
+                        <li>Close all rings during shutdown</li>
+                    </ul>
+
+                    <h4>IoUringEntry</h4>
+                    <p>Each <code>IoUringEntry</code> represents a single io_uring instance with its associated resources:</p>
+                    <pre><code>case class IoUringEntry(
+    q: Queue[IO[Unit]], // IO[Unit] wrapped operation to execute later
+    cntr: AtomicInteger,
+    ring: IoUring
+)</code></pre>
+
+                    <p>It provides synchronized wrappers for io_uring operations:</p>
+                    <ul>
+                        <li><code>queueRead</code>: Enqueues a read operation</li>
+                        <li><code>queueWrite</code>: Enqueues a write operation</li>
+                    </ul>
+
+                    <h4>IOURingChannel</h4>
+                    <p>The <code>IOURingChannel</code> class implements the <code>IOChannel</code> interface using io_uring for I/O operations. It provides Cats Effect IO-wrapped methods for:</p>
+                    <ul>
+                        <li>Reading data from a socket</li>
+                        <li>Writing data to a socket</li>
+                        <li>Closing connections</li>
+                    </ul>
+                    <p>The class uses IO.async to convert callback-based io_uring operations into Cats Effect IO.</p>
+
+                    <h3>Cats Effect IO.async Implementation</h3>
+                    <p>The core of the implementation uses Cats Effect's asynchronous programming model to wrap the callback-based io_uring API:</p>
+                    <pre><code>def accept(ring: IoUring, serverSocket: IoUringServerSocket): IO[(IoUring, IoUringSocket)] = {
+  for {
+    result <- IO.asyncForIO[Any, Throwable, (IoUring, IoUringSocket)](cb =>
+      for {
+        f1 <- IO.pure((ring: IoUring, socket: IoUringSocket) => cb(Right((ring, socket))))
+        _ <- IO.blocking(ioUringAccept(ring, serverSocket, f1))
+      } yield None
+    )
+  } yield (result)
+}</code></pre>
+
+                    <p>This pattern is used throughout the codebase to convert callback-based operations into Cats Effect IO:</p>
+                    <ol>
+                        <li><code>IO.async</code> creates an asynchronous effect that will be completed when the callback is invoked</li>
+                        <li>A callback function is created that will complete the IO effect when invoked</li>
+                        <li>The native io_uring operation is invoked with the callback, which will eventually complete the IO effect</li>
+                        <li>The Cats Effect IO effect is returned, which will complete when the io_uring operation completes</li>
+                    </ol>
+
+                    <h3>Event Processing</h3>
+                    <p>Two key processors handle the io_uring event loop:</p>
+                    <ol>
+                        <li><strong>Submit Processor</strong>: Takes operations from the queue and submits them to the io_uring instance
+                        <pre><code>def submitProcessor(entry: IoUringEntry): Task[Unit]</code></pre>
+                        </li>
+                        <li><strong>CQEs Processor</strong>: Processes completion queue events from the io_uring instance
+                        <pre><code>def getCqesProcessor(entry: IoUringEntry): Task[Unit]</code></pre>
+                        </li>
+                    </ol>
+                    <p>Both processors run in separate fibers (managed by Cats Effect) and continue until shutdown is requested.</p>
+                </div>
+
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2>User Guide</h2>
+
+                    <h3>Configuring IoUring Rings</h3>
+
+                    <h4>Setting the Number of Ring Instances</h4>
+                    <p>The number of io_uring instances is configured when starting the server. This is a critical performance parameter that should be tuned based on your system's resources and workload.</p>
+                    <p>In your application code, set the number of ring instances:</p>
+                    <pre><code>// Define the number of ring instances to use
+val NUMBER_OF_RING_INSTANCES = 4  // Adjust based on your needs
+
+// Start the server with the specified number of ring instances
+new QuartzH2Server(
+  "localhost",
+  8443,
+  16000,
+  ctx,
+  onConnect = onConnect,
+  onDisconnect = onDisconnect
+).startIO_linuxOnly(NUMBER_OF_RING_INSTANCES, R, filter)</code></pre>
+
+                    <h4>Ring Size Configuration</h4>
+                    <p>The size of each ring (number of entries in the submission and completion queues) can be configured when creating the <code>IoUringTbl</code>:</p>
+                    <pre><code>// Default ring size is 1024, but can be customized
+IoUringTbl(server, count, ringSize = 2048)</code></pre>
+
+                    <h3>Performance Considerations</h3>
+
+                    <h4>Optimal Number of Rings</h4>
+                    <p>The optimal number of ring instances depends on your system's resources and workload:</p>
+                    <ul>
+                        <li><strong>CPU Cores</strong>: Generally, set NUMBER_OF_RING_INSTANCES to (total cores - 1) or less</li>
+                        <li><strong>Memory</strong>: Each ring consumes memory for its queues and buffers</li>
+                        <li><strong>Workload</strong>: I/O-bound applications may benefit from more rings</li>
+                    </ul>
+
+                    <h4>Thread Pool Configuration</h4>
+                    <p>When using io_uring, configure your thread pools appropriately:</p>
+                    <pre><code>override val bootstrap = zio.Runtime.removeDefaultLoggers ++ SLF4J.slf4j ++ zio.Runtime.setExecutor(
+  zio.Executor.fromJavaExecutor(
+    Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors() - NUMBER_OF_RING_INSTANCES)
+  )
+) ++ zio.Runtime.setBlockingExecutor(zio.Executor.fromJavaExecutor(Executors.newCachedThreadPool()))</code></pre>
+                    <p>Reserve CPU cores for io_uring event processing by subtracting NUMBER_OF_RING_INSTANCES from the available processors.</p>
+
+                    <h3>Example Configuration</h3>
+                    <p>Here's a complete example of configuring and starting a server with io_uring:</p>
+                    <pre><code>object MyApp extends IOApp {
+  // Configure the number of ring instances
+  val NUMBER_OF_RING_INSTANCES = 4
+
+  // Configure thread pools to account for io_uring rings
+  override val bootstrap = zio.Runtime.removeDefaultLoggers ++ SLF4J.slf4j ++ zio.Runtime.setExecutor(
+    zio.Executor.fromJavaExecutor(
+      Executors.newWorkStealingPool(Runtime.getRuntime().availableProcessors() - NUMBER_OF_RING_INSTANCES)
+    )
+  ) ++ zio.Runtime.setBlockingExecutor(zio.Executor.fromJavaExecutor(Executors.newCachedThreadPool()))
+
+  // Define your routes and handlers
+  val R: HttpRouteIO[String] = { /* your routes here */ }
+
+  def run = {
+    val env = "Hello Cats Effect World!"
+    (for {
+      ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
+      exitCode <- new QuartzH2Server(
+        "localhost",
+        8443,
+        16000,
+        ctx,
+        onConnect = id => Logger[IO].trace(s"connected - $id"),
+        onDisconnect = id => Logger[IO].trace(s"disconnected - $id")
+      ).startIO_linuxOnly(NUMBER_OF_RING_INSTANCES, R, WebFilter.identity)
+    } yield (exitCode)).provideSomeLayer(env)
+  }
+}</code></pre>
+
+                    <h3>Monitoring and Debugging</h3>
+                    <p>To monitor the performance of your io_uring configuration:</p>
+                    <ol>
+                        <li>Enable trace logging to see connection and io_uring events:
+                        <pre><code>QuartzH2Server.setLoggingLevel(Level.TRACE)</code></pre>
+                        </li>
+                        <li>Watch for log messages related to ring operations and completion events</li>
+                        <li>Monitor system metrics like CPU usage and I/O wait times</li>
+                    </ol>
+                </div>
+
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2>Low-Level JNI Implementation</h2>
+
+                    <h3>Native Linux io_uring Integration</h3>
+                    <p>The Quartz H2 server integrates with Linux's io_uring API through a custom JNI (Java Native Interface) layer. This section explains how the high-level Scala code interacts with the low-level native Linux io_uring implementation.</p>
+
+                    <h4>Architecture Overview</h4>
+                    <p>The integration follows a layered approach:</p>
+                    <ol>
+                        <li><strong>Scala Layer</strong>: High-level Cats Effect IO and abstractions in IoUringTbl.scala</li>
+                        <li><strong>Java Layer</strong>: JNI interface classes in the io.quartz.iouring package</li>
+                        <li><strong>Native Layer</strong>: C implementation in liburing_provider.c that directly interfaces with the Linux kernel's io_uring API</li>
+                    </ol>
+
+                    <h3>Key Native Functions</h3>
+
+                    <h4>1. Queue Operations (queueRead/queueWrite)</h4>
+                    <p>The queueRead and queueWrite functions in IoUringEntry wrap the native io_uring submission queue operations:</p>
+
+                    <h5>Scala Layer (IoUringEntry)</h5>
+                    <pre><code>def queueRead(consumer: Consumer[ByteBuffer], channel: IoUringSocket, buffer: java.nio.ByteBuffer): Task[Unit] =
+  for {
+    _ <- IO.delay(channel.onRead(consumer))
+    queueReadIO <- IO.delay(IO.delay(ring.queueRead(channel, buffer)))
+    _ <- q.offer(queueReadIO.unit)
+  } yield ()
+
+def queueWrite(consumer: Consumer[ByteBuffer], channel: IoUringSocket, buffer: java.nio.ByteBuffer): Task[Unit] =
+  for {
+    _ <- IO.delay(channel.onWrite(consumer))
+    queueWriteIO <- IO.delay(IO.delay(ring.queueWrite(channel, buffer)))
+    _ <- q.offer(queueWriteIO.unit)
+  } yield ()</code></pre>
+
+                    <h5>Java Layer (IoUring.java)</h5>
+                    <pre><code>public IoUring queueRead(AbstractIoUringChannel channel, ByteBuffer buffer) {
+    // Validation and preparation
+    fdToSocket.put(channel.fd(), channel);
+    long bufferAddress = IoUring.queueRead(ring, channel.fd(), buffer, buffer.position(),
+            buffer.limit() - buffer.position(), offset);
+    // Reference counting for buffer management
+    ReferenceCounter<ByteBuffer> refCounter = channel.readBufferMap().get(bufferAddress);
+    if (refCounter == null) {
+        refCounter = new ReferenceCounter<>(buffer);
+        channel.readBufferMap().put(bufferAddress, refCounter);
+    }
+    refCounter.incrementReferenceCount();
+    return this;
+}
+
+public IoUring queueWrite(AbstractIoUringChannel channel, ByteBuffer buffer) {
+    // Validation and preparation
+    fdToSocket.put(channel.fd(), channel);
+    long bufferAddress = IoUring.queueWrite(ring, channel.fd(), buffer, buffer.position(),
+            buffer.limit() - buffer.position(), offset);
+    // Reference counting for buffer management
+    ReferenceCounter<ByteBuffer> refCounter = channel.writeBufferMap().get(bufferAddress);
+    if (refCounter == null) {
+        refCounter = new ReferenceCounter<>(buffer);
+        channel.writeBufferMap().put(bufferAddress, refCounter);
+    }
+    refCounter.incrementReferenceCount();
+    return this;
+}</code></pre>
+
+                    <h5>Native Layer (liburing_provider.c)</h5>
+                    <pre><code>JNIEXPORT jlong JNICALL
+Java_io_quartz_iouring_IoUring_queueRead(JNIEnv *env, jclass cls, jlong ring_address, 
+                                        jint fd, jobject byte_buffer, 
+                                        jint buffer_pos, jint buffer_len, jlong io_offset) {
+    // Get direct buffer address
+    void *buffer = (*env)->GetDirectBufferAddress(env, byte_buffer);
+    
+    // Get io_uring instance and check space
+    struct io_uring *ring = (struct io_uring *) ring_address;
+    if (io_uring_sq_space_left(ring) <= 1) {
+        throw_exception(env, "io_uring_sq_space_left", -EBUSY);
+        return -1;
+    }
+    
+    // Get submission queue entry
+    struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+    
+    // Prepare request metadata
+    struct request *req = malloc(sizeof(*req));
+    req->event_type = EVENT_TYPE_READ;
+    req->buffer_addr = (int64_t) buffer;
+    req->fd = fd;
+    
+    // Prepare read operation
+    io_uring_prep_read(sqe, fd, buffer + buffer_pos, buffer_len, (uint64_t) io_offset);
+    io_uring_sqe_set_data(sqe, req);
+    
+    return (uint64_t) buffer;
+}
+
+JNICALL
+Java_io_quartz_iouring_IoUring_queueWrite(JNIEnv *env, jclass cls, jlong ring_address, 
+                                        jint fd, jobject byte_buffer, 
+                                        jint buffer_pos, jint buffer_len, jlong io_offset) {
+    // Get direct buffer address
+    void *buffer = (*env)->GetDirectBufferAddress(env, byte_buffer);
+    
+    // Get io_uring instance and check space
+    struct io_uring *ring = (struct io_uring *) ring_address;
+    if (io_uring_sq_space_left(ring) <= 1) {
+        throw_exception(env, "io_uring_sq_space_left", -EBUSY);
+        return -1;
+    }
+    
+    // Get submission queue entry
+    struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
+    
+    // Prepare request metadata
+    struct request *req = malloc(sizeof(*req));
+    req->event_type = EVENT_TYPE_WRITE;
+    req->buffer_addr = (int64_t) buffer;
+    req->fd = fd;
+    
+    // Prepare write operation
+    io_uring_prep_write(sqe, fd, buffer + buffer_pos, buffer_len, (uint64_t) io_offset);
+    io_uring_sqe_set_data(sqe, req);
+    
+    return (uint64_t) buffer;
+}</code></pre>
+
+                    <p>The native implementation uses the liburing library to:</p>
+                    <ol>
+                        <li>Obtain a submission queue entry (SQE) from the io_uring instance</li>
+                        <li>Prepare the read/write operation with the appropriate file descriptor, buffer, and offset</li>
+                        <li>Associate user data with the SQE for later identification when the operation completes</li>
+                        <li>Return the buffer address for reference counting in the Java layer</li>
+                    </ol>
+
+                    <h4>2. Completion Queue Processing (getCqes)</h4>
+                    <p>The getCqes method processes completion events from the io_uring instance:</p>
+
+                    <h5>Scala Layer (IoUringTbl)</h5>
+                    <pre><code>def getCqesProcessor(entry: IoUringEntry): Task[Unit] = {
+  val processCqes = IO.blocking(entry.ring.getCqes(server.timeout)).handleErrorWith { case _: Throwable =>
+    Logger[IO].error("IoUring: ring shutdown") >> IO.delay(IoUringTbl.shutdown = true) >> server.shutdown
+  }
+  // Continue until shutdown becomes true
+  processCqes
+    .repeatUntil(_ => IoUringTbl.shutdown || server.shutdownFlag)
+    .unit
+}</code></pre>
+
+                    <h5>Java Layer (IoUring.java)</h5>
+                    <pre><code>public int getCqes(long timeoutMs) {
+    return doGetCqes(true, timeoutMs);
+}
+
+private int doGetCqes(boolean shouldWait, long timeoutMs) {
+    int didReadEverHappen = 0;    
+    
+    // Check for completion events
+    int count = IoUring.getCqes(ring, resultBuffer, cqes, ringSize, shouldWait, timeoutMs);
+    
+    // Process each completion event
+    for (int i = 0; i < count && i < ringSize; i++) {
+        try {
+            int eventType = handleEventCompletion(cqes, resultBuffer, i);
+            if (eventType == EVENT_TYPE_READ) didReadEverHappen = 1;
+        } finally {
+            IoUring.markCqeSeen(ring, cqes, i);
+        }
+    }
+    
+    return didReadEverHappen;
+}</code></pre>
+
+                    <h5>Native Layer (liburing_provider.c)</h5>
+                    <pre><code>JNIEXPORT jint JNICALL
+Java_io_quartz_iouring_IoUring_getCqes(JNIEnv *env, jclass cls, jlong ring_address, 
+                                      jobject byte_buffer, jlong cqes_address, 
+                                      jint cqes_size, jboolean should_wait, jlong timeoutMs) {
+    struct io_uring *ring = (struct io_uring *) ring_address;
+    struct io_uring_cqe **cqes = (struct io_uring_cqe **) cqes_address;
+    
+    // First try to peek for completions without waiting
+    int32_t ret = io_uring_peek_batch_cqe(ring, cqes, cqes_size);
+    
+    // If no completions and we should wait, use timeout
+    if (ret == 0 && should_wait) {
+        struct __kernel_timespec ts;
+        ts.tv_sec = timeoutMs / 1000;
+        ts.tv_nsec = (timeoutMs % 1000) * 1000000;  // Convert ms to ns
+        ret = io_uring_wait_cqe_timeout(ring, cqes, &ts);
+        if (ret < 0) {
+            return 0; // Timeout or error
+        }
+        ret = 1;
+    }
+    
+    // Process completion events and copy data to Java buffer
+    char *buffer = (*env)->GetDirectBufferAddress(env, byte_buffer);
+    int32_t cqe_index = 0;
+    int32_t buf_index = 0;
+    
+    while (cqe_index < ret) {
+        struct io_uring_cqe *cqe = cqes[cqe_index];
+        struct request *req = (struct request *) cqe->user_data;
+        
+        // Copy result, file descriptor, and event type to buffer
+        buffer[buf_index++] = cqe->res >> 24;
+        buffer[buf_index++] = cqe->res >> 16;
+        buffer[buf_index++] = cqe->res >> 8;
+        buffer[buf_index++] = cqe->res;
+        
+        buffer[buf_index++] = req->fd >> 24;
+        buffer[buf_index++] = req->fd >> 16;
+        buffer[buf_index++] = req->fd >> 8;
+        buffer[buf_index++] = req->fd;
+        
+        buffer[buf_index++] = req->event_type;
+        
+        // For read/write operations, also include buffer address
+        if (req->event_type == EVENT_TYPE_READ || req->event_type == EVENT_TYPE_WRITE) {
+            // Copy 8-byte buffer address
+            buffer[buf_index++] = req->buffer_addr >> 56;
+            // ... (remaining bytes)
+        }
+        
+        cqe_index++;
+    }
+    
+    return (int32_t) ret;
+}</code></pre>
+
+                    <p>The native implementation:</p>
+                    <ol>
+                        <li>First tries to peek for any completed events without waiting</li>
+                        <li>If instructed to wait and no events are available, uses io_uring_wait_cqe_timeout to wait with a timeout</li>
+                        <li>For each completion event, extracts the result code, file descriptor, and event type</li>
+                        <li>Serializes this information into a byte buffer that's passed back to Java</li>
+                        <li>For read/write operations, also includes the buffer address for reference counting</li>
+                    </ol>
+
+                    <h4>3. Submission Processing (submitProcessor)</h4>
+                    <p>The submitProcessor function processes operations from the queue and submits them to the io_uring instance:</p>
+
+                    <h5>Scala Implementation</h5>
+                    <pre><code>def submitProcessor(entry: IoUringEntry): Task[Unit] = {
+  val processSubmit = for {
+    fiber <- IO.executionContext.map(_.toString)
+    queueOpIO <- entry.q.take
+    _ <- queueOpIO >> IO.delay(entry.ring.submit())
+  } yield ()
+
+  processSubmit
+    .catchAll { case e: Throwable =>
+      Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") >>
+        IO.delay(IoUringTbl.shutdown = true) >> server.shutdown
+    }
+    .catchAllDefect { deffect =>
+      Logger[IO].error(s"Server halted, cannot exit from callback, critical error") >>
+        IO.delay(deffect.printStackTrace()) >>
+        IO.delay(IoUringTbl.shutdown = true) >> server.shutdown
+    }
+    .repeatUntil(_ => IoUringTbl.shutdown || server.shutdownFlag)
+}</code></pre>
+
+                    <h5>Native Submit Implementation</h5>
+                    <pre><code>JNIEXPORT jint JNICALL
+Java_io_quartz_iouring_IoUring_submit(JNIEnv *env, jclass cls, jlong ring_address) {
+    struct io_uring *ring = (struct io_uring *) ring_address;
+
+    int32_t ret = io_uring_submit(ring);
+    if (ret < 0) {
+        if (ret != -EBUSY) { // if busy, continue handling completions
+            throw_exception(env, "io_uring_submit", ret);
+            return -1;
+        }
+    }
+    return ret;
+}</code></pre>
+
+                    <p>The submission process:</p>
+                    <ol>
+                        <li>Takes queued operations from the bounded queue</li>
+                        <li>Executes the operation, which prepares an SQE as shown in the queueRead/queueWrite sections</li>
+                        <li>Calls the native submit method to submit all prepared operations to the kernel</li>
+                        <li>Handles errors and continues processing until shutdown is requested</li>
+                    </ol>
+
+                    <h3>Complete Asynchronous Workflow</h3>
+                    <p>The complete workflow for an asynchronous I/O operation is:</p>
+                    <ol>
+                        <li><strong>Operation Queuing</strong>: A Cats Effect IO calls queueRead/queueWrite, which prepares the operation and adds it to the queue</li>
+                        <li><strong>Submission Processing</strong>: The submitProcessor fiber takes operations from the queue and submits them to the kernel via io_uring_submit</li>
+                        <li><strong>Kernel Processing</strong>: The Linux kernel processes the operations asynchronously</li>
+                        <li><strong>Completion Processing</strong>: The getCqesProcessor fiber waits for and processes completion events</li>
+                        <li><strong>Callback Execution</strong>: When a completion is detected, the appropriate callback (onRead/onWrite) is invoked with the result</li>
+                        <li><strong>IO Effect Completion</strong>: The IO.async effect completes, allowing the original caller to continue</li>
+                    </ol>
+
+                    <h3>Performance Considerations</h3>
+                    <p>The JNI implementation is designed for high performance:</p>
+                    <ul>
+                        <li><strong>Direct ByteBuffers</strong>: All I/O operations use direct ByteBuffers to minimize copying between Java and native memory</li>
+                        <li><strong>Reference Counting</strong>: The implementation uses reference counting to manage buffer lifetimes and prevent memory leaks</li>
+                        <li><strong>Batch Processing</strong>: The native code can process multiple completion events in a single call</li>
+                        <li><strong>Non-blocking I/O</strong>: The io_uring API provides true asynchronous I/O without blocking threads</li>
+                        <li><strong>Timeout Control</strong>: The getCqes method supports timeouts to prevent indefinite blocking</li>
+                    </ul>
+
+                    <h3>Error Handling</h3>
+                    <p>Errors are handled at multiple levels:</p>
+                    <ul>
+                        <li><strong>Native Level</strong>: Errors from io_uring operations are converted to Java exceptions</li>
+                        <li><strong>Java Level</strong>: Exceptions are caught and passed to registered exception handlers</li>
+                        <li><strong>Scala Level</strong>: Cats Effect's error handling captures exceptions and converts them to IO failures</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white shadow-md rounded-lg p-6">
+                    <h2>Requirements</h2>
+                    <ul>
+                        <li>Linux kernel 5.1 or later (for io_uring support)</li>
+                        <li>JDK 11 or later</li>
+                        <li>Cats Effect 3.x</li>
+                        <li>Native io_uring libraries properly installed</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+</body>
+</html>
