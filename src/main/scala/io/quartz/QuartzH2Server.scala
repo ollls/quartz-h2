@@ -643,7 +643,7 @@ class QuartzH2Server(
       acceptURing <- IO(new IoUring(4096))
 
       loop = for {
-        a <- IOURingChannel.accept(acceptURing, serverSocket)
+        a <- IOURingChannel.accept(acceptURing, serverSocket).flatTap(_ => conId.update(_ + 1))
         (ring, socket) = a
         _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
 
@@ -704,8 +704,9 @@ class QuartzH2Server(
 
         ring <- rings.get
 
+        _ <- conId.update(_ + 1)
+
         ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
-        _ <- IO(ch.ch1.setBuffers(1024 * 1024, 4 * 1024 * 1024))
 
         f1 <- IO(TLSChannel(sslCtx.get, ch))
           .flatMap(c => c.ssl_init_h2().map((c, _)))
