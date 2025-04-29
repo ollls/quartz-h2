@@ -23,6 +23,9 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   val BLOCK_SIZE = 1024 * 14
   val NUMBER_OF_STREAMS = 24
 
+  val linux = false
+  val SSL = true
+
   QuartzH2Server.setLoggingLevel(Level.INFO)
 
   val R: HttpRouteIO = {
@@ -51,16 +54,19 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("Parallel streams with GET") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
+      server <-
+        if (SSL) IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
+        else IO(new QuartzH2Server("localhost", PORT.toInt, 46000, None))
 
-      fib <- (server.startIO(R, sync = false)).start 
-      //uncomment to run on Linux with iouring
-      //fib <- (server.iouring_startIO(R)).start
-      ///////////////////////////////////////////////  
+      fib <-
+        if (linux)(server.iouring_startIO(R)).start
+        else (server.startIO(R, sync = false)).start
 
       _ <- IO.sleep(1000.millis)
 
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
+      c <-
+        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 30 * 1000, ctx)
+        else QuartzH2Client.open(s"http://localhost:$PORT", 30 * 1000, null)
 
       program = c.doGet("/" + BIG_FILE).flatMap(_.stream.compile.count)
       list <- Parallel.parReplicateA(NUMBER_OF_STREAMS, program)
@@ -72,13 +78,22 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
 
     } yield (assert(list.size == NUMBER_OF_STREAMS))
   }
+
   test("proper 404 handling while sending data") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
-      fib <- (server.startIO(R, sync = false)).start
+      server <-
+        if (SSL) IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
+        else IO(new QuartzH2Server("localhost", PORT.toInt, 46000, None))
+
+      fib <-
+        if (linux)(server.iouring_startIO(R)).start
+        else (server.startIO(R, sync = false)).start
       _ <- IO.sleep(1000.millis)
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
+
+      c <-
+        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 30 * 1000, ctx)
+        else QuartzH2Client.open(s"http://localhost:$PORT", 30 * 1000, null)
 
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
       fileStream <- IO(new java.io.FileInputStream(path))
@@ -96,16 +111,27 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   test("Parallel streams with POST") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
-      server <- IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
-      fib <- (server.startIO(R, sync = false)).start
+
+      server <-
+        if (SSL) IO(new QuartzH2Server("localhost", PORT.toInt, 46000, Some(ctx)))
+        else IO(new QuartzH2Server("localhost", PORT.toInt, 46000, None))
+
+      fib <-
+        if (linux)(server.iouring_startIO(R)).start
+        else (server.startIO(R, sync = false)).start
+
       _ <- IO.sleep(1000.millis)
-      c <- QuartzH2Client.open(s"https://localhost:$PORT", 46000, ctx)
+
+      c <-
+        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 30 * 1000, ctx)
+        else QuartzH2Client.open(s"http://localhost:$PORT", 30 * 1000, null)
+
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
 
       program = for {
         fileStream <- IO(new java.io.FileInputStream(path))
         r <- c.doPost("/upload/" + BIG_FILE, fs2.io.readInputStream(IO(fileStream), BLOCK_SIZE, true))
-        bytes <- r.bodyAsText.map( _.toInt)
+        bytes <- r.bodyAsText.map(_.toInt)
       } yield (bytes)
 
       list <- Parallel.parReplicateA(NUMBER_OF_STREAMS, program)

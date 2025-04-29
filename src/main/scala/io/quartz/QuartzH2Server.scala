@@ -20,7 +20,6 @@ import io.quartz.http2.Constants._
 import io.quartz.http2.Frames
 import io.quartz.http2.Http2Settings
 
-//import cats.implicits._
 import org.typelevel.log4cats.Logger
 import ch.qos.logback.classic.Level
 import io.quartz.MyLogger._
@@ -344,8 +343,12 @@ class QuartzH2Server(
   def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
     start(Routes.of(pf, filter), sync)
 
-  def iouring_startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0))): IO[ExitCode] =
-    startIoUring(Routes.of(pf, filter))
+  def iouring_startIO(
+      pf: HttpRouteIO,
+      urings: Int = 1,
+      filter: WebFilter = (r0: Request) => IO(Right(r0))
+  ): IO[ExitCode] =
+    startIoUring(Routes.of(pf, filter), urings)
 
   /** Starts an HTTP server that handles requests based on the given routing function, using the `RIO` monad to handle
     * computations that depend on the environment `Env`.
@@ -403,9 +406,8 @@ class QuartzH2Server(
       run3(executor, R, numOfCores, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
-  def startIoUring(R: HttpRoute): IO[ExitCode] = {
-    val cores = Runtime.getRuntime().availableProcessors()
-    val nrings = 1
+  def startIoUring(R: HttpRoute, nrings: Int): IO[ExitCode] = {
+    val cores = Runtime.getRuntime().availableProcessors() - nrings
     val h2streams = cores * 4
     val THREAD_POOL_SIZE = cores - nrings
     val fjj = new ForkJoinWorkerThreadFactory {
