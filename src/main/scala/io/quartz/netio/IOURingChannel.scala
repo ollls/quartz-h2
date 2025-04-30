@@ -203,7 +203,7 @@ class IOURingChannel(
     } yield( b.position() )
   }
 
-  def close(): IO[Unit] = for {
+  def closeAsync(): IO[Unit] = for {
     result <- IO.async[Unit](cb =>
       for {
         r <- IO(new Runnable {
@@ -219,7 +219,7 @@ class IOURingChannel(
   } yield (result)
 
   
-  def closeSync(): IO[Unit] = for {
+  def close(): IO[Unit] = for {
     _ <- IO.delay(ch1.close())
   } yield ()
 

@@ -29,6 +29,10 @@ case class IoUringEntry(
     ring: IoUring
 ) {
 
+  def close() = synchronized(ring.close())
+
+  def getCqes(timeOut: Long) = synchronized(ring.getCqes(timeOut))
+
   def queueClose(run: Runnable, channel: IoUringSocket): IO[Unit] =
     for {
       _ <- IO(channel.onClose(run))
@@ -134,7 +138,7 @@ class IoUringTbl(entries: List[IoUringEntry]) {
   def size: Int = entries.size
 
   def closeIoURings = {
-    IO(entries.foreach(_.ring.close()))
+      IO(IoUringTbl.shutdown = true) *> IO(entries.foreach(_.close()))
   }
 }
 
@@ -146,19 +150,19 @@ object IoUringTbl {
   var server: QuartzH2Server = null
 
   def getCqesProcessor(entry: IoUringEntry): IO[Unit] = {
-    val processCqes = IO
-      .blocking(entry.ring.getCqes(9000))
+    val processCqes = IO.blocking(entry.getCqes(9000))
       .handleErrorWith { case e: Throwable =>
         // Log more detailed information about the error to help diagnose Wi-Fi disconnection issues
         Logger[IO].error(
           s"IoUring: ring shutdown due to error: ${e.getMessage}. This might indicate network disconnection."
-        ) >>
-          IO(IoUringTbl.shutdown = true) >> server.shutdown
+        ) *>
+          IO(IoUringTbl.shutdown = true) *> server.shutdown
       }
+      .void
 
     // Continue until shutdown becomes true
     processCqes
-      .iterateUntil(_ => IoUringTbl.shutdown)
+      .iterateUntil(_ => IoUringTbl.shutdown || server.shutdownFlag)
       .void
   }
 
@@ -185,11 +189,11 @@ object IoUringTbl {
 
     processSubmit
       .handleErrorWith { case e: Throwable =>
-        Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") >>
+        Logger[IO].error(s"${e.toString()} - IoUring: submission queue shutdown") *>
           // IO(e.printStackTrace()) >>
-          IO(IoUringTbl.shutdown = true) >> server.shutdown
+          IO(IoUringTbl.shutdown = true) *> server.shutdown
       }
-      .iterateUntil(_ => IoUringTbl.shutdown)
+      .iterateUntil(_ => IoUringTbl.shutdown || server.shutdownFlag)
   }
 
   /** Create a new IoUringTbl with the specified number of IoUring instances.
@@ -202,7 +206,8 @@ object IoUringTbl {
     *   IO containing a new IoUringTbl
     */
   def apply(server: QuartzH2Server, count: Int, ringSize: Int = 1024): IO[IoUringTbl] = {
-    IO(this.server = server) >>
+    IO(IoUringTbl.shutdown = false) *>
+      IO(this.server = server) *>
       (0 until count)
         .map(_ =>
           for {
@@ -219,7 +224,7 @@ object IoUringTbl {
           // Start a processor for each IoUringEntry
           entries
             .traverse { entry =>
-              submitProcessor(entry).start >> getCqesProcessor(entry).start
+              submitProcessor(entry).start *> getCqesProcessor(entry).start
             }
             .as(tbl)
         }

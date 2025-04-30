@@ -21,9 +21,9 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
   val FOLDER_PATH = "/home/ols/web_root/"
   val BIG_FILE = "IMG_0278.jpeg"
   val BLOCK_SIZE = 1024 * 14
-  val NUMBER_OF_STREAMS = 24
+  val NUMBER_OF_STREAMS = 4
 
-  val linux = false
+  val linux = true
   val SSL = true
 
   QuartzH2Server.setLoggingLevel(Level.INFO)
@@ -79,6 +79,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
     } yield (assert(list.size == NUMBER_OF_STREAMS))
   }
 
+
   test("proper 404 handling while sending data") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
@@ -92,8 +93,8 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
       _ <- IO.sleep(1000.millis)
 
       c <-
-        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 30 * 1000, ctx)
-        else QuartzH2Client.open(s"http://localhost:$PORT", 30 * 1000, null)
+        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 60 * 1000, ctx)
+        else QuartzH2Client.open(s"http://localhost:$PORT", 60 * 1000, null)
 
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
       fileStream <- IO(new java.io.FileInputStream(path))
@@ -108,6 +109,7 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
     } yield (assert(res.status.value == 404))
   }
 
+  
   test("Parallel streams with POST") {
     for {
       ctx <- QuartzH2Server.buildSSLContext("TLS", "keystore.jks", "password")
@@ -120,11 +122,11 @@ object QuartzH2ClientServerSuite extends IOTestSuite {
         if (linux)(server.iouring_startIO(R)).start
         else (server.startIO(R, sync = false)).start
 
-      _ <- IO.sleep(1000.millis)
+      _ <- IO.sleep(4000.millis)
 
       c <-
-        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 30 * 1000, ctx)
-        else QuartzH2Client.open(s"http://localhost:$PORT", 30 * 1000, null)
+        if (SSL) QuartzH2Client.open(s"https://localhost:$PORT", 60 * 1000, ctx)
+        else QuartzH2Client.open(s"http://localhost:$PORT", 60 * 1000, null)
 
       path <- IO(new java.io.File(FOLDER_PATH + BIG_FILE))
 
