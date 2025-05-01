@@ -206,7 +206,7 @@ object MyApp extends IOApp {
         Some(ctx),
         incomingWinSize = 1024 * 256
       )
-        .iouring_startIO(R, filter)
+        .iouring_startIO(R, urings = 1, filter)
 
     } yield (exitCode)
 

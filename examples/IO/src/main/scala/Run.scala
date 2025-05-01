@@ -101,6 +101,18 @@ object MyApp extends IOApp {
       val ts2 = ts ++ Stream.emits("Block22\n".getBytes())
       IO(Response.Ok().asStream(ts2))
 
+    case req @ GET -> "docs" /: _ =>
+      val BLOCK_SIZE = 16000
+      for {
+        reqPath <- IO(req.uri.getPath())
+        jpath <- IO(new java.io.File("./" + reqPath))
+        jstream <- IO.blocking(new java.io.FileInputStream(jpath))
+        fname <- IO(jpath.getName())
+      } yield (Response
+        .Ok()
+        .asStream(fs2.io.readInputStream(IO(jstream), BLOCK_SIZE, true))
+        .contentType(ContentType.contentTypeFromFileName(fname)))
+
     // Any regular file or mp4 videos wih Http Range.
     // Ranged Video streaming tested with Firefox,Safari,Chrome
     case req @ GET -> Root / StringVar(file) =>
@@ -129,6 +141,20 @@ object MyApp extends IOApp {
 
   def run(args: List[String]): IO[ExitCode] =
     for {
+
+      _ <- IO.println(
+        "****************************************************************************************"
+      )
+      _ <- IO.println(
+        "\u001B[31mUse https://localhost:8443/docs/index.html to read the index.html file\u001B[0m"
+      )
+      _ <- IO.println(
+        "\u001B[31mUse https://localhost:8443/mov_bbb.mp4 to play a media file\u001B[0m"
+      )
+      _ <- IO.println(
+        "****************************************************************************************"
+      )
+
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.DEBUG)).whenA(args.find(_ == "--debug").isDefined)
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.ERROR)).whenA(args.find(_ == "--error").isDefined)
       _ <- IO(QuartzH2Server.setLoggingLevel(Level.OFF)).whenA(args.find(_ == "--off").isDefined)
