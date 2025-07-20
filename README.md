@@ -5,7 +5,7 @@ TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native
 https://ollls.github.io/quartz-h2/index.html
 
 ```
-"io.github.ollls" %% "tapir-quartz-h2" % "0.7"
+"io.github.ollls" %% "tapir-quartz-h2" % "0.9.0"
 ```
 
 https://ollls.github.io/quartz-h2/index.html
