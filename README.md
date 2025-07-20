@@ -17,18 +17,17 @@ sbt TAPIR/run
 sbt RIO/run
 ```
 
-Open https://localhost:8443/doc/index.html in the browser.<br>
-Open https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged http video streams with TAPIR/run)
+- Open https://localhost:8443/doc/index.html in the browser.
+- Open https://localhost:8443/mp4safari - to test iPhone/Safari compatible ranged http video streams with TAPIR/run)
 
-Partial func based route: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala<br>
-Tapir endpoints routes:   https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala<br>
+- Partial func based route: https://github.com/ollls/quartz-h2/blob/main/examples/IO/src/main/scala/Run.scala<br>
+- Tapir endpoints routes:   https://github.com/ollls/quartz-h2/blob/main/examples/STTP/src/main/scala/Run.scala<br>
 
 
-https://github.com/ollls/json-template-qh2
-https://github.com/ollls/qh2_tapir_template
-https://github.com/ollls/quartz-h2-gptapi
-https://github.com/ollls/qh2_grpc
-
+- https://github.com/ollls/json-template-qh2
+- https://github.com/ollls/qh2_tapir_template
+- https://github.com/ollls/quartz-h2-gptapi
+- https://github.com/ollls/qh2_grpc
 
 ## Tests
 
