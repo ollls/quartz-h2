@@ -8,6 +8,9 @@ TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native
 ## Documentation
 https://ollls.github.io/quartz-h2/index.html
 
+## 0.8.5 README
+https://github.com/ollls/quartz-h2/blob/v0.8.5/README.md
+
 ## Examples, use cases
 https://github.com/ollls/quartz-h2/tree/main/examples
 
