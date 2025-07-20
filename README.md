@@ -8,8 +8,11 @@ https://ollls.github.io/quartz-h2/index.html
 
 ## Tests
 
+###Tests with h2load
 https://nghttp2.org/documentation/h2load-howto.html 
-http2 spec compatibility tests: https://formulae.brew.sh/formula/h2spec
+
+### http2 spec compatibility tests
+https://formulae.brew.sh/formula/h2spec
 
 ```
 h2load -D10 -c62 -m30 -t2 https://localhost:8443/test
@@ -25,14 +28,17 @@ time to 1st byte:    55.31ms    181.53ms    120.53ms     55.00ms    51.61%
 req/s           :    1762.79     1837.34     1793.33       18.37    69.35%
 ```
 
-How to run h2spec:
+### How to run h2spec:
 
-Start server with "sbt IO/run" ./h2spec http2 -h localhost -p 8443 -t -k You should get:
+Start server with "sbt IO/run" 
+```
+./h2spec http2 -h localhost -p 8443 -t -k You should get:
 
 Finished in 1.4891 seconds
 94 tests, 93 passed, 1 skipped, 0 failed
+```
 
-How to run test cases:
+### How to run test cases:
 
 sbt test
 
