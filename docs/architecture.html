@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZIO Quartz H2 - Architecture</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+        .hero-image {
+            max-height: 180px;
+            object-fit: contain;
+        }
+        code {
+            background-color: #f1f5f9;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f1f5f9;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left Sidebar -->
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto">
+                <!-- Header with Logo -->
+                <div class="flex flex-col md:flex-row items-center justify-between mb-8 pb-4 border-b border-gray-200">
+                    <div class="flex items-center mb-4 md:mb-0">
+                        <img src="quartz-h2.jpeg" alt="ZIO Quartz H2 Logo" class="hero-image mr-4 rounded-lg shadow-md">
+                        <h1 class="text-3xl font-bold text-blue-600">ZIO Quartz H2 Architecture</h1>
+                    </div>
+                </div>
+                
+                <p class="text-lg mb-6">This document outlines the architecture of the Quartz H2 server, a high-performance HTTP/2 implementation built with Scala and Cats Effect. The architecture focuses on efficient resource management, functional stream processing, and robust connection handling for both HTTP/1.1 and HTTP/2 protocols.</p>
+
+                <!-- System Overview -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">System Overview</h2>
+                    
+                    <p class="mb-4">Quartz H2 is a modern HTTP/2 server implementation with the following key features:</p>
+                    
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Protocol Support</strong>: Full HTTP/2 implementation with fallback to HTTP/1.1</li>
+                        <li><strong>TLS Support</strong>: ALPN-based protocol negotiation for secure connections</li>
+                        <li><strong>IO-Uring Integration</strong>: Linux io_uring support for high-performance I/O operations</li>
+                        <li><strong>Functional Core</strong>: Built with Cats Effect for pure functional programming</li>
+                        <li><strong>Stream Processing</strong>: Efficient data handling with fs2 streams</li>
+                        <li><strong>Resource Safety</strong>: Proper resource acquisition and release</li>
+                        <li><strong>Flow Control</strong>: Comprehensive HTTP/2 flow control implementation</li>
+                    </ul>
+                </div>
+
+                <!-- System Architecture -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">System Architecture</h2>
+                    
+                    <pre class="text-sm">
+┌───────────────────────────────────────────────────────────────────────────┐
+│                           QuartzH2Server                                  │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      │ creates
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     Connection Management Layer                           │
+│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐   │
+│  │  TLSChannel     │      │  TCPChannel     │      │  IOURingChannel │   │
+│  │  (ALPN, SNI)    │      │  (Plain HTTP)   │      │  (Linux only)   │   │
+│  └─────────────────┘      └─────────────────┘      └─────────────────┘   │
+└───────────────────────────────┬───────────────────────────────────────────┘
+                                │
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     Protocol Handler Layer                                │
+│  ┌─────────────────┐                          ┌─────────────────┐         │
+│  │  Http2Connection│                          │ Http11Connection│         │
+│  │                 │                          │                 │         │
+│  └────────┬────────┘                          └────────┬────────┘         │
+│           │                                            │                  │
+│           ▼                                            ▼                  │
+│  ┌─────────────────┐                          ┌─────────────────┐         │
+│  │  Http2Stream(s) │                          │ ChunkedTransfer │         │
+│  │                 │                          │                 │         │
+│  └─────────────────┘                          └─────────────────┘         │
+└───────────────────────────────┬───────────────────────────────────────────┘
+                                │
+                                ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     Application Layer                                     │
+│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐    │
+│  │  HttpRoute      │      │  WebFilter      │      │  HttpRouteIO    │    │
+│  │                 │      │                 │      │                 │    │
+│  └─────────────────┘      └─────────────────┘      └─────────────────┘    │
+└───────────────────────────────────────────────────────────────────────────┘
+                    </pre>
+                    
+                    <p class="mt-4">The architecture is organized into three main layers:</p>
+                    
+                    <ol class="list-decimal pl-6 mb-4 space-y-2">
+                        <li><strong>Connection Management Layer</strong>: Handles raw socket connections, TLS negotiation, and I/O operations</li>
+                        <li><strong>Protocol Handler Layer</strong>: Implements HTTP/1.1 and HTTP/2 protocol logic, including streams and flow control</li>
+                        <li><strong>Application Layer</strong>: Processes HTTP requests and generates responses through routes and filters</li>
+                    </ol>
+                </div>
+
+                <!-- HTTP/2 Connection Implementation -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">HTTP/2 Connection Implementation</h2>
+                    
+                    <p class="mb-4">The <code>Http2Connection</code> class is the core component that manages HTTP/2 connections. It extends <code>Http2ConnectionCommon</code> which provides shared functionality for both client and server HTTP/2 connections.</p>
+                    
+                    <pre class="text-sm">
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Http2Connection                               │
+│                                                                         │
+│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐  │
+│  │  Outbound Queue │      │  Flow Control   │      │ Stream Table    │  │
+│  │  (outq)         │◄────►│  Management     │◄────►│ (streamTbl)     │  │
+│  └─────────────────┘      └─────────────────┘      └─────────────────┘  │
+│           ▲                        ▲                        ▲           │
+│           │                        │                        │           │
+│           ▼                        ▼                        ▼           │
+│  ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐  │
+│  │ Outbound Worker │      │ Packet Handler  │      │ Http2Stream(s)  │  │
+│  │ Process         │◄────►│                 │◄────►│                 │  │
+│  └─────────────────┘      └─────────────────┘      └─────────────────┘  │
+│                                    ▲                        ▲           │
+└────────────────────────────────────┼────────────────────────┼───────────┘
+                                      │                        │
+                                      ▼                        ▼
+┌──────────────────────────────────┐    ┌──────────────────────────┐
+│         IOChannel                 │    │      Http Route          │
+└──────────────────────────────────┘    └──────────────────────────┘
+                    </pre>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mt-4 mb-2">Key Components</h3>
+                    
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Http2Connection</strong>: The main class that manages an HTTP/2 connection, handling frame processing, flow control, and stream management</li>
+                        <li><strong>Http2Stream</strong>: Represents an individual HTTP/2 stream within a connection, with its own flow control windows and data queues</li>
+                        <li><strong>Outbound Queue (outq)</strong>: A bounded queue (capacity 1024) for managing outgoing data packets</li>
+                        <li><strong>Stream Table (streamTbl)</strong>: A concurrent map that tracks all active streams in the connection</li>
+                        <li><strong>Flow Control Management</strong>: Implements HTTP/2 flow control at both connection and stream levels</li>
+                    </ul>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Connection Establishment</h3>
+                    
+                    <p class="mb-4">The <code>QuartzH2Server</code> handles connection establishment through several methods:</p>
+                    
+                    <ol class="list-decimal pl-6 mb-4 space-y-2">
+                        <li><strong>Direct HTTP/2 Connection</strong>: When a client sends the HTTP/2 preface string, a new <code>Http2Connection</code> is created</li>
+                        <li><strong>HTTP/1.1 Upgrade</strong>: When a client requests an upgrade to HTTP/2 via the HTTP/1.1 Upgrade header, the server performs the protocol switch</li>
+                        <li><strong>TLS with ALPN</strong>: For secure connections, ALPN negotiation determines whether to use HTTP/2 or HTTP/1.1</li>
+                    </ol>
+                </div>
+
+                <!-- Functional Stream Processing -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Functional Stream Processing</h2>
+                    
+                    <p class="mb-4">Quartz H2 leverages functional streams (fs2.Stream) as a core abstraction for processing HTTP/2 data. Unlike traditional imperative streams, these streams represent a <em>description</em> of data transformations that are executed only when the stream is run. This functional approach provides several benefits:</p>
+                    
+                    <ol class="list-decimal pl-6 mb-4 space-y-2">
+                        <li><strong>Composability</strong>: Stream transformations can be composed together without side effects</li>
+                        <li><strong>Resource Safety</strong>: Resources are properly acquired and released</li>
+                        <li><strong>Backpressure</strong>: Automatic handling of backpressure throughout the pipeline</li>
+                        <li><strong>Error Handling</strong>: Structured error handling within the stream processing pipeline</li>
+                    </ol>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Key Stream Transformations</h3>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong><code>makePacketStream</code></strong>: Creates a Stream that reads from the IOChannel and transforms raw bytes into HTTP/2 packets</li>
+                        <li><strong><code>packetStreamPipe</code></strong>: Transforms a stream of bytes into a stream of HTTP/2 frames</li>
+                        <li><strong><code>dataEvalEffectProducer</code></strong>: Produces data from queues as a Stream transformation</li>
+                    </ul>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Stream Processing Implementation</h3>
+                    <p class="mb-4">The implementation uses several advanced stream processing techniques:</p>
+                    
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Chunked Processing</strong>: Data is processed in chunks for efficiency, with careful handling of partial frames</li>
+                        <li><strong>Pull-based Consumption</strong>: The <code>Pull</code> API is used to implement custom stream processing logic</li>
+                        <li><strong>Lazy Evaluation</strong>: Stream transformations are applied lazily when the stream is consumed</li>
+                        <li><strong>Resource Management</strong>: Proper acquisition and release of resources using bracket patterns</li>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">1. Outbound Queue (<code>outq</code>)</h3>
+                    <ul class="list-disc pl-6 mb-4">
+                        <li><strong>Purpose</strong>: Manages outgoing data packets (ByteBuffers) to be sent to the client</li>
+                        <li><strong>Type</strong>: <code>Queue[IO, ByteBuffer]</code></li>
+                        <li><strong>Capacity</strong>: Bounded queue with capacity of 1024</li>
+                        <li><strong>Creation</strong>: Created during the initialization of an HTTP/2 connection</li>
+                        <li><strong>Usage</strong>: All outgoing frames are offered to this queue and processed by the outbound worker</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">2. Stream Flow Control Queues</h3>
+                    <p class="mb-2">Each HTTP/2 stream has several queues to manage its data flow:</p>
+
+                    <h4 class="text-md font-medium text-blue-600 mb-1">a. Data Input Queue (<code>inDataQ</code>)</h4>
+                    <ul class="list-disc pl-6 mb-3">
+                        <li><strong>Purpose</strong>: Accumulates incoming data packets for a specific stream</li>
+                        <li><strong>Type</strong>: <code>Queue[IO, ByteBuffer]</code></li>
+                        <li><strong>Capacity</strong>: Unbounded queue</li>
+                        <li><strong>Creation</strong>: Created when a new stream is opened</li>
+                        <li><strong>Usage</strong>: Stores incoming DATA frames for processing by the application</li>
+                    </ul>
+
+                    <h4 class="text-md font-medium text-blue-600 mb-1">b. Flow Control Sync Queue (<code>outXFlowSync</code>)</h4>
+                    <ul class="list-disc pl-6 mb-3">
+                        <li><strong>Purpose</strong>: Synchronizes flow control for outgoing data frames</li>
+                        <li><strong>Type</strong>: <code>Queue[IO, Boolean]</code></li>
+                        <li><strong>Capacity</strong>: Unbounded queue</li>
+                        <li><strong>Creation</strong>: Created when a new stream is opened</li>
+                        <li><strong>Usage</strong>: Signals when the stream can send more data based on flow control window updates</li>
+                    </ul>
+
+                    <h4 class="text-md font-medium text-blue-600 mb-1">c. Window Update Sync Queue (<code>syncUpdateWindowQ</code>)</h4>
+                    <ul class="list-disc pl-6 mb-3">
+                        <li><strong>Purpose</strong>: Manages window update synchronization</li>
+                        <li><strong>Type</strong>: <code>Queue[IO, Unit]</code></li>
+                        <li><strong>Capacity</strong>: Dropping queue with capacity of 1</li>
+                        <li><strong>Creation</strong>: Created when a new stream is opened</li>
+                        <li><strong>Usage</strong>: Coordinates window updates for flow control</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Concurrency Control</h3>
+                    <p class="mb-4">The implementation uses several mechanisms to ensure thread-safe concurrent operations:</p>
+
+                    <ul class="list-disc pl-6 mb-4">
+                        <li><strong>Semaphores</strong>: Used to control access to shared resources, particularly for operations that need exclusive access</li>
+                        <li><strong>Refs</strong>: Thread-safe reference cells that manage state updates atomically</li>
+                        <li><strong>Deferred</strong>: Used for one-shot communication between fibers, particularly for signaling completion or shutdown</li>
+                        <li><strong>Fibers</strong>: Lightweight concurrency primitives that allow for parallel execution with proper resource management</li>
+                    </ul>
+                </div>
+
+                <!-- Data Flow Process -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Data Flow Process</h2>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Incoming Data Flow</h3>
+                    <ol class="list-decimal pl-6 mb-6 space-y-3">
+                        <li>
+                            <strong>Data Reception as Stream</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>The <code>processIncoming</code> method sets up a Stream pipeline starting with leftover data</li>
+                                <li><code>makePacketStream</code> creates a Stream that reads from the IOChannel and transforms raw bytes into HTTP/2 packets</li>
+                                <li>This is a <em>description</em> of the transformation, not the actual execution</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Stream Transformation</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>The byte stream is transformed via the <code>packetStreamPipe</code> pipeline</li>
+                                <li>This pipeline chunks the bytes into proper HTTP/2 frames</li>
+                                <li>The transformation is applied lazily when the stream is consumed</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Stream Consumption</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>The transformed stream is consumed with <code>foreach</code>, which applies <code>packet_handler</code> to each packet</li>
+                                <li>Only at this point is the actual I/O performed and frames processed</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Packet Handling</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>Each packet is processed by the <code>packet_handler</code> method</li>
+                                <li>Frames are parsed and handled according to their type (HEADERS, DATA, SETTINGS, etc.)</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Stream Data Processing</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>For DATA frames, the data is placed in the appropriate stream's <code>inDataQ</code></li>
+                                <li>Flow control is managed by updating window sizes and sending WINDOW_UPDATE frames when necessary</li>
+                            </ul>
+                        </li>
+                    </ol>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Outgoing Data Flow</h3>
+                    <ol class="list-decimal pl-6 mb-6 space-y-3">
+                        <li>
+                            <strong>Frame Generation</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>Outgoing frames are created using methods like <code>headerFrame</code> and <code>dataFrame</code></li>
+                                <li>These frames are offered to the <code>outq</code> queue</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Outbound Processing</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>The <code>outBoundWorkerProc</code> continuously takes frames from the <code>outq</code> queue</li>
+                                <li>It writes the frames to the IOChannel for transmission to the client</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Flow Control Management</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>Before sending DATA frames, the system checks both global and stream-specific flow control windows</li>
+                                <li>The <code>txWindow_Transmit</code> method handles the logic for splitting frames if necessary based on available window size</li>
+                                <li>The <code>outXFlowSync</code> queue is used to signal when more data can be sent after window updates</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong>Response Streaming</strong>:
+                            <ul class="list-disc pl-6 mt-1">
+                                <li>When sending response bodies, data is often provided as a Stream</li>
+                                <li>This allows for efficient streaming of large responses without loading everything into memory</li>
+                                <li>The Stream is consumed and transformed into HTTP/2 DATA frames as needed</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+                
+                <!-- HTTP/1.1 Implementation -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">HTTP/1.1 Implementation</h2>
+                    
+                    <p class="mb-4">Quartz H2 includes a robust HTTP/1.1 implementation that serves as a fallback when HTTP/2 is not supported or negotiated. The HTTP/1.1 implementation has been enhanced with comprehensive documentation, better error handling, and improved code structure.</p>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">HTTP/1.1 Connection Handler</h3>
+                    <p class="mb-4">The HTTP/1.1 connection handler includes the following improvements:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Detailed Documentation</strong>: Comprehensive class and method documentation following Scaladoc conventions</li>
+                        <li><strong>Improved Error Handling</strong>: Better error messages with specific details about what went wrong</li>
+                        <li><strong>Enhanced Content Length Handling</strong>: Fixed content length error handling with better diagnostics</li>
+                        <li><strong>Type Annotations</strong>: Added proper type annotations for better code clarity</li>
+                        <li><strong>Enhanced Logging</strong>: Improved logging with more context and better categorization (debug vs error)</li>
+                        <li><strong>Header Translation</strong>: Clarified HTTP header translation between HTTP/1.1 and HTTP/2 formats</li>
+                        <li><strong>Exception Handling</strong>: Improved exception handling for malformed requests</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Chunked Transfer Encoding</h3>
+                    <p class="mb-4">The HTTP/1.1 chunked transfer encoding implementation has been enhanced with:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>RFC 7230 Compliance</strong>: Proper handling of RFC 7230 compliant chunked transfer encoding</li>
+                        <li><strong>Improved Validation</strong>: Enhanced validation of chunk terminators and headers</li>
+                        <li><strong>Bounds Checking</strong>: Added proper bounds checking to prevent IndexOutOfBoundsExceptions</li>
+                        <li><strong>Structured Code</strong>: Better comments explaining the logic and improved code organization</li>
+                        <li><strong>Error Propagation</strong>: Improved exception handling to propagate errors properly through the stream</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">HTTP Range Requests</h3>
+                    <p class="mb-4">The HttpRangeRequest class has been improved with:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>ETag Generation</strong>: Proper ETag generation based on file metadata (path, size, and modification time)</li>
+                        <li><strong>Range Handling</strong>: Better range handling with named variables for readability</li>
+                        <li><strong>Byte Range Calculations</strong>: Fixed byte range calculations for partial content requests</li>
+                        <li><strong>Native Scala Approach</strong>: Used a native Scala approach for byte-to-hex conversion without external dependencies</li>
+                    </ul>
+                </div>
+
+                <!-- Key Components -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Key Components</h2>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">QuartzH2Server</h3>
+                    <p class="mb-4">The main server class that manages HTTP/2 connections, handles SSL context setup, and manages incoming connections. It provides the following key functionality:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Connection Management</strong>: Creates and manages HTTP/2 and HTTP/1.1 connections</li>
+                        <li><strong>TLS Configuration</strong>: Sets up SSL context and handles ALPN negotiation</li>
+                        <li><strong>Server Socket Binding</strong>: Binds to the specified host and port</li>
+                        <li><strong>Connection Lifecycle Hooks</strong>: Provides callbacks for connection events (connect, disconnect)</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Http2Connection</h3>
+                    <p class="mb-4">The main class that manages an HTTP/2 connection. It extends <code>Http2ConnectionCommon</code> and implements the core HTTP/2 protocol logic, including:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Frame Processing</strong>: Handles different types of HTTP/2 frames</li>
+                        <li><strong>Stream Management</strong>: Creates and manages HTTP/2 streams</li>
+                        <li><strong>Flow Control</strong>: Implements HTTP/2 flow control mechanisms</li>
+                        <li><strong>Settings Management</strong>: Handles HTTP/2 settings frames and parameters</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Http2Stream</h3>
+                    <p class="mb-4">Represents an individual HTTP/2 stream within a connection. Each stream has its own set of queues for managing data flow and handles:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Stream-Level Flow Control</strong>: Manages stream-specific flow control windows</li>
+                        <li><strong>Header Processing</strong>: Handles HTTP headers for requests and responses</li>
+                        <li><strong>Data Queueing</strong>: Manages incoming and outgoing data</li>
+                        <li><strong>Stream State</strong>: Tracks the state of the stream (idle, open, closed, etc.)</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">TLSChannel</h3>
+                    <p class="mb-4">Handles secure connections using SSL/TLS protocols. Key features include:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>ALPN Support</strong>: Application-Layer Protocol Negotiation for HTTP/2</li>
+                        <li><strong>SNI Support</strong>: Server Name Indication for virtual hosting</li>
+                        <li><strong>Secure Handshake</strong>: Manages the SSL/TLS handshake process</li>
+                        <li><strong>Encrypted Communication</strong>: Handles encryption and decryption of data</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Flow Control</h3>
+                    <p class="mb-4">HTTP/2 implements flow control at two levels:</p>
+                    <ol class="list-decimal pl-6 mb-4">
+                        <li><strong>Connection-Level</strong>: Managed by <code>globalTransmitWindow</code> and <code>globalInboundWindow</code></li>
+                        <li><strong>Stream-Level</strong>: Each stream has its own <code>transmitWindow</code> and <code>inboundWindow</code></li>
+                    </ol>
+                    <p>Cats Effect Queues play a crucial role in coordinating these flow control mechanisms, ensuring efficient data transmission while preventing buffer bloat and resource exhaustion.</p>
+                </div>
+                
+                <!-- Client Implementation -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Client Implementation</h2>
+                    
+                    <p class="mb-4">Quartz H2 includes a client implementation for making HTTP/2 requests to servers. The <code>QuartzH2Client</code> provides functionality for establishing connections and sending requests.</p>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Connection Establishment</h3>
+                    <p class="mb-4">The client supports several methods for establishing connections:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>TLS with ALPN</strong>: Secure connections with protocol negotiation via <code>connectTLS_alpn_h2</code></li>
+                        <li><strong>Direct HTTP/2</strong>: Plain HTTP/2 connections without TLS</li>
+                        <li><strong>Connection Pooling</strong>: Reusing connections for multiple requests to improve performance</li>
+                    </ul>
+
+                    <h3 class="text-lg font-medium text-blue-700 mb-2">Request Handling</h3>
+                    <p class="mb-4">The client provides several features for handling requests:</p>
+                    <ul class="list-disc pl-6 mb-4 space-y-2">
+                        <li><strong>Streaming Requests</strong>: Support for streaming request bodies</li>
+                        <li><strong>Header Management</strong>: Proper handling of HTTP/2 headers</li>
+                        <li><strong>Response Processing</strong>: Processing and streaming of response data</li>
+                        <li><strong>Error Handling</strong>: Robust error handling for network issues and protocol errors</li>
+                    </ul>
+                </div>
+                
+                <!-- Conclusion -->
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Conclusion</h2>
+                    
+                    <p class="mb-4">Quartz H2 is a high-performance HTTP/2 server and client implementation built with Scala and Cats Effect. Its architecture emphasizes:</p>
+                    
+                    <ul class="list-disc pl-6 mb-6 space-y-2">
+                        <li><strong>Functional Programming</strong>: Pure functional approach using Cats Effect for composable, referentially transparent operations</li>
+                        <li><strong>Stream Processing</strong>: Efficient data handling with fs2 streams for backpressure and resource management</li>
+                        <li><strong>Protocol Compliance</strong>: Full HTTP/2 implementation with fallback to enhanced HTTP/1.1</li>
+                        <li><strong>Performance</strong>: Optimized for high throughput and low latency with features like connection pooling and io_uring support</li>
+                        <li><strong>Robustness</strong>: Comprehensive error handling and recovery mechanisms</li>
+                    </ul>
+                    
+                    <p>The architecture provides a solid foundation for building high-performance web applications and services with modern HTTP capabilities while maintaining code clarity and maintainability through functional programming principles.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+</body>
+</html>

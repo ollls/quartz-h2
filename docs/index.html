@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quartz H2 - Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+        .hero-image {
+            max-height: 180px;
+            object-fit: contain;
+        }
+        code {
+            background-color: #f1f5f9;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Left Sidebar -->
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto">
+                <!-- Header with Logo -->
+                <div class="flex flex-col md:flex-row items-center justify-between mb-8 pb-4 border-b border-gray-200">
+                    <div class="flex items-center mb-4 md:mb-0">
+                        <img src="quartz-h2.jpeg" alt="ZIO Quartz H2 Logo" class="hero-image mr-4 rounded-lg shadow-md">
+                        <h1 class="text-3xl font-bold text-blue-600">Quartz H2</h1>
+                    </div>
+                </div>
+                
+                <p class="text-lg mb-6">Quartz H2 is a high-performance HTTP/2 server built with Scala and Cats Effect, providing both HTTP/1.1 and HTTP/2 protocol support with various connection modes.</p>
+                
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Server Architecture Overview</h2>
+                    <p class="mb-4">Quartz H2 is designed with flexibility and performance in mind, supporting multiple connection modes and protocols:</p>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mt-6 mb-2">Connection Modes</h3>
+                    <ul class="list-disc pl-5 space-y-2 mb-4">
+                        <li><strong>Asynchronous NIO Mode</strong> - Uses Java NIO for non-blocking I/O operations with Cats Effect</li>
+                        <li><strong>Synchronous Socket Mode</strong> - Uses traditional Java Socket API for synchronous connections</li>
+                        <li><strong>Linux io_uring Mode</strong> - Leverages Linux's io_uring interface for high-performance I/O operations (Linux-specific)</li>
+                    </ul>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mt-6 mb-2">Protocol Support</h3>
+                    <ul class="list-disc pl-5 space-y-2 mb-4">
+                        <li><strong>HTTP/2 with TLS (h2)</strong> - Full HTTP/2 protocol support over TLS connections</li>
+                        <li><strong>HTTP/2 Clear Text (h2c)</strong> - HTTP/2 protocol support without encryption</li>
+                        <li><strong>HTTP/1.1</strong> - Backward compatibility with HTTP/1.1 protocol</li>
+                        <li><strong>Protocol Upgrade</strong> - Support for upgrading HTTP/1.1 connections to HTTP/2</li>
+                    </ul>
+                    
+                    <h3 class="text-lg font-medium text-blue-700 mt-6 mb-2">Connection Flow</h3>
+                    <p class="mb-2">The server handles connections through the following process:</p>
+                    <ol class="list-decimal pl-5 space-y-2 mb-4">
+                        <li>Accept incoming connection (TCP or TLS)</li>
+                        <li>Detect protocol (HTTP/1.1 or HTTP/2)</li>
+                        <li>For HTTP/2: Process preface and establish HTTP/2 connection</li>
+                        <li>For HTTP/1.1: Process as HTTP/1.1 or attempt upgrade to HTTP/2 if requested</li>
+                        <li>Route requests to appropriate handlers</li>
+                        <li>Stream responses back to clients</li>
+                    </ol>
+                </div>
+                
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Key Components</h2>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">QuartzH2Server</h3>
+                        <p>The main server class that manages HTTP/2 connections with features like:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li>Connection management for HTTP/2 and HTTP/1.1</li>
+                            <li>TLS configuration and ALPN negotiation</li>
+                            <li>Server socket binding</li>
+                            <li>Connection lifecycle hooks</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Http2Connection</h3>
+                        <p>Manages HTTP/2 connections with features like:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li>Frame processing for different HTTP/2 frame types</li>
+                            <li>Stream management</li>
+                            <li>Flow control implementation</li>
+                            <li>Settings management</li>
+                            <li>Header compression</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Http2Stream</h3>
+                        <p>Represents an individual HTTP/2 stream with:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li>Stream-level flow control</li>
+                            <li>Header processing</li>
+                            <li>Data queueing</li>
+                            <li>Stream state management</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Http11Connection</h3>
+                        <p>Handles HTTP/1.1 connections with support for:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li>Improved chunked transfer encoding</li>
+                            <li>HTTP range requests with proper ETag generation</li>
+                            <li>Enhanced error handling and logging</li>
+                            <li>Keep-alive connections</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Channel Types</h3>
+                        <p>Different channel implementations for I/O operations:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li><code>AsyncSocketChannel</code> - For asynchronous NIO operations</li>
+                            <li><code>SocketChannel</code> - For Socket-based connections</li>
+                            <li><code>TLSChannel</code> - For secure connections with SSL/TLS</li>
+                            <li><code>IOURingChannel</code> - For Linux io_uring-based connections</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Performance Features</h2>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Stream Multiplexing</strong> - Multiple requests over a single connection</li>
+                        <li><strong>Efficient Resource Usage</strong> - Configurable thread pools and connection limits</li>
+                        <li><strong>Linux io_uring Support</strong> - High-performance I/O operations on Linux systems</li>
+                        <li><strong>Cats Effect Integration</strong> - Leverages Cats Effect for functional concurrency and resource management</li>
+                        <li><strong>Configurable Timeouts</strong> - Idle connection timeouts to manage resources</li>
+                        <li><strong>Flow Control</strong> - Prevents overwhelming clients with data</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Client Implementation</h2>
+                    <p class="mb-4">Quartz H2 includes a client implementation for making HTTP/2 requests to servers:</p>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Connection Establishment</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong>TLS with ALPN</strong> - Secure connections with protocol negotiation</li>
+                            <li><strong>Direct HTTP/2</strong> - Plain HTTP/2 connections without TLS</li>
+                            <li><strong>Connection Pooling</strong> - Reusing connections for multiple requests</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-lg font-medium text-blue-700 mb-2">Request Handling</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong>Streaming Requests</strong> - Support for streaming request bodies</li>
+                            <li><strong>Header Management</strong> - Proper handling of HTTP/2 headers</li>
+                            <li><strong>Response Processing</strong> - Processing and streaming of response data</li>
+                            <li><strong>Error Handling</strong> - Robust error handling for network issues</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="bg-white shadow-md rounded-lg p-6">
+                    <h2 class="text-xl font-semibold text-blue-600 mb-4">Documentation</h2>
+                    <p class="mb-4">Explore the documentation to learn more about Quartz H2:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <a href="routes.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">Routes DSL</h3>
+                            <p class="text-gray-600">Learn how to define routes using the functional DSL</p>
+                        </a>
+                        <a href="streams.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">FS2 Streams Integration</h3>
+                            <p class="text-gray-600">Discover how to use FS2 Streams with Quartz H2</p>
+                        </a>
+                        <a href="architecture.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">Architecture</h3>
+                            <p class="text-gray-600">Understand the architecture and design of Quartz H2</p>
+                        </a>
+                        <a href="xflow.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">Flow Control</h3>
+                            <p class="text-gray-600">Learn about HTTP/2 flow control implementation</p>
+                        </a>
+                        <a href="zionio.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">Cats Effect Async for Java NIO</h3>
+                            <p class="text-gray-600">Explore the Java NIO implementation with Cats Effect</p>
+                        </a>
+                        <a href="zio-iouring.html" class="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <h3 class="text-lg font-medium text-blue-700">Cats Effect Async for IoUring</h3>
+                            <p class="text-gray-600">Learn about the Linux io_uring integration with Cats Effect</p>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/navigation.js"></script>
+</body>
+</html>

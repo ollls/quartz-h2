@@ -7,7 +7,7 @@ object Frames {
 
   // No need to create new underlying arrays every time since at most it will be 255 bytes of 0's
   private[this] val sharedPadding: ByteBuffer =
-    ByteBuffer.allocate(255).asReadOnlyBuffer()
+    ByteBuffer.allocateDirect(255).asReadOnlyBuffer()
 
   private[this] def tailPadding(padBytes: Int): List[ByteBuffer] =
     if (0 < padBytes) {
@@ -70,7 +70,7 @@ object Frames {
   ): ByteBuffer = {
 
     val payloadSize = 3 * 6
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
     val flags = if (ack) Flags.ACK.toInt else 0x0
 
     writeFrameHeader(payloadSize, FrameTypes.SETTINGS, flags.toByte, 0, buffer)
@@ -92,7 +92,7 @@ object Frames {
   def makeSettingsFrameE(ack: Boolean = true): ByteBuffer = {
     val payloadSize = 0
     val flags = if (ack) Flags.ACK.toInt else 0x0
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
     writeFrameHeader(payloadSize, FrameTypes.SETTINGS, flags.toByte, 0, buffer)
 
     buffer.flip()
@@ -105,7 +105,7 @@ object Frames {
     require(0 <= errorCode && errorCode <= Masks.INT32, "Invalid error code")
 
     val payloadSize = 4
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
     writeFrameHeader(payloadSize, FrameTypes.RST_STREAM, 0x0, streamId, buffer)
     buffer.putInt((errorCode & Masks.INT32).toInt)
     buffer.flip()
@@ -120,7 +120,7 @@ object Frames {
   ): ByteBuffer = {
     require(0 <= lastStreamId, "Invalid last stream id for GOAWAY frame")
     val size = 8
-    val buffer = ByteBuffer.allocate(HeaderSize + size + debugData.length)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + size + debugData.length)
     writeFrameHeader(size + debugData.length, FrameTypes.GOAWAY, 0x0, 0, buffer)
 
     buffer
@@ -135,7 +135,7 @@ object Frames {
   def makeSettingsAckFrame(): ByteBuffer = {
 
     val payloadSize = 0
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
     val flags = Flags.ACK.toInt
 
     writeFrameHeader(payloadSize, FrameTypes.SETTINGS, flags.toByte, 0, buffer)
@@ -150,7 +150,7 @@ object Frames {
   ): ByteBuffer = {
 
     val payloadSize = 6 * 6
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
     val flags = if (ack) Flags.ACK.toInt else 0x0
 
     writeFrameHeader(payloadSize, FrameTypes.SETTINGS, flags.toByte, 0, buffer)
@@ -187,7 +187,7 @@ object Frames {
 
     val flags: Byte = if (ack) Flags.ACK else 0x0
 
-    val buffer = ByteBuffer.allocate(HeaderSize + PingSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + PingSize)
     writeFrameHeader(PingSize, FrameTypes.PING, flags, 0, buffer)
     buffer.put(data).flip()
 
@@ -220,7 +220,7 @@ object Frames {
       flags |= Flags.END_STREAM
 
     val payloadSize = data.remaining + padding
-    val dataFrame = ByteBuffer.allocate(HeaderSize + (if (padded) 1 else 0) + payloadSize)
+    val dataFrame = ByteBuffer.allocateDirect(HeaderSize + (if (padded) 1 else 0) + payloadSize)
 
     writeFrameHeader(payloadSize, FrameTypes.DATA, flags.toByte, streamId, dataFrame)
 
@@ -242,7 +242,7 @@ object Frames {
     )
 
     val size = 4
-    val buffer = ByteBuffer.allocate(HeaderSize + size)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + size)
     writeFrameHeader(size, FrameTypes.WINDOW_UPDATE, 0x0, streamId, buffer)
     buffer
       .putInt(Masks.INT31 & increment)
@@ -257,7 +257,7 @@ object Frames {
 
     val payloadSize = headerBuffer.remaining
 
-    val buffer = ByteBuffer.allocate(HeaderSize + payloadSize)
+    val buffer = ByteBuffer.allocateDirect(HeaderSize + payloadSize)
 
     writeFrameHeader(headerBuffer.remaining, FrameTypes.CONTINUATION, flags, streamId, buffer)
     buffer.put(headerBuffer)
@@ -302,7 +302,7 @@ object Frames {
 
     val payloadSize = nonDataSize + headerData.remaining + padding
 
-    val header = ByteBuffer.allocate(HeaderSize + nonDataSize + payloadSize)
+    val header = ByteBuffer.allocateDirect(HeaderSize + nonDataSize + payloadSize)
 
     writeFrameHeader(payloadSize, FrameTypes.HEADERS, flags.toByte, streamId, header)
 

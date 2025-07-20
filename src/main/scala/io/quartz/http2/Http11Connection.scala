@@ -15,17 +15,38 @@ import cats.effect.kernel.Deferred
 import io.quartz.util.Chunked11
 import io.quartz.websocket.Websocket
 
+/**
+ * HTTP/1.1 Connection Handler
+ * --------------------------
+ * Manages HTTP/1.1 connections with support for chunked encoding, websockets, and request routing.
+ * Translates between HTTP/1.1 and HTTP/2 header formats for internal processing consistency.
+ * 
+ * Key features:
+ * - Content length validation and limits
+ * - Chunked transfer encoding support
+ * - WebSocket protocol upgrade handling
+ * - Integration with HTTP routing system
+ */
 case class HeaderSizeLimitExceeded(msg: String) extends Exception(msg)
 case class BadIncomingData(msg: String) extends Exception(msg)
 
 object Http11Connection {
 
-  val MAX_ALLOWED_CONTENT_LEN = 1048576 * 100 // 104 MB
+  /** Maximum allowed content length in bytes (100MB) */
+  val MAX_ALLOWED_CONTENT_LEN = 1048576 * 100 // 100 MB
 
-  def make(ch: IOChannel, id: Long, keepAliveMs: Int, httpRoute: HttpRoute) = for {
+  /**
+   * Creates a new HTTP/1.1 connection handler
+   * @param ch The underlying IO channel
+   * @param id Connection identifier
+   * @param keepAliveMs Keep-alive timeout in milliseconds
+   * @param httpRoute HTTP route for processing requests
+   * @return A new HTTP/1.1 connection instance
+   */
+  def make(ch: IOChannel, id: Long, keepAliveMs: Int, httpRoute: HttpRoute): IO[Http11Connection[Any]] = for {
     streamIdRef <- Ref.of[IO, Int](1)
     c <- IO(new Http11Connection(ch, keepAliveMs, id, streamIdRef, httpRoute))
-  } yield (c)
+  } yield c
 }
 
 class Http11Connection[Env](
@@ -36,9 +57,18 @@ class Http11Connection[Env](
     httpRoute: HttpRoute
 ) {
 
+  /**
+   * Shuts down the connection and logs the event
+   * @return IO unit when complete
+   */
   def shutdown: IO[Unit] =
-    Logger[IO].debug("Http11Connection.shutdown")
+    Logger[IO].debug(s"Http11Connection.shutdown for connection $id")
 
+  /**
+   * Translates HTTP/1.1 headers to HTTP/2 format
+   * @param headers The HTTP/1.1 headers
+   * @return Headers in HTTP/2 format
+   */
   def translateHeadersFrom11to2(headers: Headers): Headers = {
     val map = headers.tbl.map((k, v) => {
       val k1 = k.toLowerCase() match {
@@ -51,6 +81,13 @@ class Http11Connection[Env](
     new Headers(map)
   }
 
+  /**
+   * Processes incoming HTTP/1.1 requests
+   * @param headers0 Initial headers if available
+   * @param leftOver_tls Any leftover bytes from TLS processing
+   * @param refStart Reference to track if this is the start of processing
+   * @return IO unit when request processing is complete
+   */
   def processIncoming(
       headers0: Headers,
       leftOver_tls: Chunk[Byte],
@@ -76,8 +113,8 @@ class Http11Connection[Env](
 
       _ <- refStart.set(false)
 
-      validate <- IO
-        .raiseError(new BadIncomingData("bad inbound data or invalid request"))
+      _ <- IO
+        .raiseError(new BadIncomingData("Bad inbound data or invalid request: missing or invalid pseudo-headers"))
         .whenA(headers.validatePseudoHeaders == false)
 
       body_stream = (fs2.Stream(leftover) ++ fs2.Stream.repeatEval(ch.read(keepAliveMs))).flatMap(fs2.Stream.chunk(_))
@@ -91,12 +128,14 @@ class Http11Connection[Env](
 
       contentLen <- IO(headers.get("content-length").getOrElse("0"))
       contentLenL <- IO.fromTry(scala.util.Try(contentLen.toLong))
-      _ <- Logger[IO].trace(s"content-length = $contentLen")
+        .handleErrorWith(_ => IO.raiseError(new BadIncomingData(s"Invalid content-length header value: $contentLen")))
+      
+      _ <- Logger[IO].debug(s"content-length = $contentLen")
       _ <-
-        if (contentLenL > Http11Connection.MAX_ALLOWED_CONTENT_LEN) IO.raiseError(new Exception("ContentLenTooBig"))
+        if (contentLenL > Http11Connection.MAX_ALLOWED_CONTENT_LEN) 
+          IO.raiseError(new HeaderSizeLimitExceeded(s"Content length $contentLenL exceeds maximum allowed size ${Http11Connection.MAX_ALLOWED_CONTENT_LEN}"))
         else IO.unit
 
-      /* TODO inbbound CHUNKED stream */
       stream <-
         if (isWebSocket) IO(body_stream)
         else if (isChunked) IO(Chunked11.makeChunkedStream(body_stream, keepAliveMs).unchunks)
@@ -112,25 +151,32 @@ class Http11Connection[Env](
     } yield ()
   }
 
-  def route2(streamId: Int, request: Request, requestChunked: Boolean) = for {
+  /**
+   * Routes the request to the appropriate handler and processes the response
+   * @param streamId Stream identifier for the request
+   * @param request The HTTP request
+   * @param requestChunked Whether the request uses chunked encoding
+   * @return IO unit when routing is complete
+   */
+  def route2(streamId: Int, request: Request, requestChunked: Boolean): IO[Unit] = for {
     _ <- Logger[IO].debug(
-      s"HTTP/1.1 chunked streamId = $streamId ${request.method.name} ${request.path} "
+      s"HTTP/1.1 request streamId=$streamId ${request.method.name} ${request.path} chunked=$requestChunked"
     )
-    _ <- Logger[IO].debug("request.headers: " + request.headers.printHeaders(" | "))
+    _ <- Logger[IO].debug("Request headers: " + request.headers.printHeaders(" | "))
 
     _ <- IO
-      .raiseError(ErrorGen(streamId, Error.COMPRESSION_ERROR, "http11 empty headers"))
+      .raiseError(ErrorGen(streamId, Error.COMPRESSION_ERROR, "HTTP/1.1 request with empty headers"))
       .whenA(request.headers.tbl.size == 0)
 
     _ <- IO
-      .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "Upercase letters in the header keys"))
+      .raiseError(ErrorGen(streamId, Error.PROTOCOL_ERROR, "Uppercase letters in header keys are not allowed"))
       .whenA(request.headers.ensureLowerCase == false)
 
     response_o: Option[Response] <- (httpRoute(request)).handleErrorWith {
       case e: (java.io.FileNotFoundException | java.nio.file.NoSuchFileException) =>
-        Logger[IO].debug(e.toString) >> IO(None)
+        Logger[IO].debug(s"File not found: ${e.getMessage}") >> IO(None)
       case e =>
-        Logger[IO].debug(e.toString) >>
+        Logger[IO].error(s"Error processing request: ${e.getMessage}") >>
           IO(Some(Response.Error(StatusCode.InternalServerError)))
     }
 
@@ -146,11 +192,13 @@ class Http11Connection[Env](
               _ <- Logger[IO].info(
                 s"HTTP/1.1 connId=$id streamId=$streamId ${request.method.name} ${request.path} chunked=$requestChunked ${response.code.toString()}"
               )
+              _ <- Logger[IO].debug("Response headers: " + response.headers.printHeaders(" | "))
             } yield ()
           case Some(pipe) =>
             val wsctx = Websocket()
             for {
               _ <- wsctx.accept(ch, request)
+              _ <- Logger[IO].debug("WebSocket connection established")
               // apply a Pipe
               p <- pipe
               inFrames <- IO(wsctx.makeFrameStream(request.stream))

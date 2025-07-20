@@ -1,9 +1,11 @@
 package io.quartz
 
 import cats.effect.{IO, Ref, Deferred, ExitCode}
+import cats.effect.std.Semaphore
 
 import fs2.{Stream, Chunk}
 
+import io.quartz.util.ResponseWriters11
 import io.quartz.http2.Http2Connection
 import io.quartz.netio._
 
@@ -18,7 +20,6 @@ import io.quartz.http2.Constants._
 import io.quartz.http2.Frames
 import io.quartz.http2.Http2Settings
 
-//import cats.implicits._
 import org.typelevel.log4cats.Logger
 import ch.qos.logback.classic.Level
 import io.quartz.MyLogger._
@@ -46,6 +47,7 @@ import scala.concurrent.ExecutionContext
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ForkJoinPool._
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.TimeUnit
 
 case class HeaderSizeLimitExceeded(msg: String) extends Exception(msg)
 case class BadProtocol(ch: IOChannel, msg: String) extends Exception(msg)
@@ -290,7 +292,7 @@ class QuartzH2Server(
         else
           for {
             _ <- Logger[IO].trace(("doConnectUpgrade() - h2c upgrade requested"))
-            _ <- ch.write(ByteBuffer.wrap(protoSwitch().getBytes))
+            _ <- ch.write(ResponseWriters11.wrapDirect(protoSwitch().getBytes))
             clientPreface <- ch.read(HTTP1_KEEP_ALIVE_MS)
             bbuf <- IO(clientPreface.toByteBuffer)
             isOK <- IO(Frames.checkPreface(bbuf))
@@ -340,6 +342,13 @@ class QuartzH2Server(
     */
   def startIO(pf: HttpRouteIO, filter: WebFilter = (r0: Request) => IO(Right(r0)), sync: Boolean): IO[ExitCode] =
     start(Routes.of(pf, filter), sync)
+
+  def iouring_startIO(
+      pf: HttpRouteIO,
+      urings: Int = 1,
+      filter: WebFilter = (r0: Request) => IO(Right(r0))
+  ): IO[ExitCode] =
+    startIoUring(Routes.of(pf, filter), urings)
 
   /** Starts an HTTP server that handles requests based on the given routing function, using the `RIO` monad to handle
     * computations that depend on the environment `Env`.
@@ -397,6 +406,29 @@ class QuartzH2Server(
       run3(executor, R, numOfCores, maxH2Streams, h2IdleTimeOutMs).evalOn(ec)
   }
 
+  def startIoUring(R: HttpRoute, nrings: Int): IO[ExitCode] = {
+    val cores = Runtime.getRuntime().availableProcessors() - nrings
+    val h2streams = cores * 4
+    val THREAD_POOL_SIZE = cores - nrings
+    val fjj = new ForkJoinWorkerThreadFactory {
+      val num = new AtomicInteger();
+      def newThread(pool: ForkJoinPool) = {
+        val thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
+        thread.setDaemon(true);
+        thread.setName("qh2-pool" + "-" + num.getAndIncrement());
+        thread;
+      }
+    }
+    val e = new java.util.concurrent.ForkJoinPool(THREAD_POOL_SIZE, fjj, (t, e) => System.exit(0), false)
+    // val e1 = java.util.concurrent.Executors.newFixedThreadPool(cores * 2);
+    val ec = ExecutionContext.fromExecutor(e)
+
+    if (sslCtx.isDefined)
+      run5(nrings, e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+    else
+      run4(nrings, e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+  }
+
   def start(R: HttpRoute, sync: Boolean): IO[ExitCode] = {
     val cores = Runtime.getRuntime().availableProcessors()
     val h2streams = cores * 2 // optimal setting tested with h2load
@@ -419,12 +451,16 @@ class QuartzH2Server(
         run0(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
       else
         run3(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+
+      // run4(e, R, cores, h2streams, h2IdleTimeOutMs).evalOn(ec)
+
     } else {
       // Loom test commented out, just FYI
       // val e = Executors.newVirtualThreadPerTaskExecutor()
       // val ec = ExecutionContext.fromExecutor(e)
       run1(R, h2streams, h2IdleTimeOutMs)
     }
+
   }
 
   private def printSniName(names: Option[Array[String]]) = {
@@ -577,6 +613,125 @@ class QuartzH2Server(
       _ <- Logger[IO].info("graceful server shutdown")
 
     } yield (ExitCode.Success)
+  }
+
+  import io.quartz.iouring.{IoUringServerSocket, IoUring}
+  import io.quartz.netio.IOURingChannel
+  import java.util.concurrent.Executors
+  import cats.implicits._
+  import scala.concurrent.ExecutionContextExecutorService
+
+  def run4(
+      nrings: Int,
+      e: ExecutorService,
+      R: HttpRoute,
+      maxThreadNum: Int,
+      maxStreams: Int,
+      keepAliveMs: Int
+  ): IO[ExitCode] = {
+    for {
+      _ <- Logger[IO].error("HTTP/2 h2c service: QuartzH2 async mode (netio/linux iouring)")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
+
+      conId <- Ref[IO].of(0L)
+
+      rings <- IoUringTbl(this, nrings)
+
+      serverSocket <- IO(new IoUringServerSocket(HOST, PORT))
+
+      _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
+
+      acceptURing <- IO(new IoUring(4096))
+
+      loop = for {
+        a <- IOURingChannel.accept(acceptURing, serverSocket).flatTap(_ => conId.update(_ + 1))
+        (ring, socket) = a
+        _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
+
+        ring <- rings.get
+
+        ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
+
+        _ <- IO(ch)
+          .flatMap(ch =>
+            IO(ch)
+              .bracket(ch =>
+                doConnect(ch, conId, maxStreams, keepAliveMs, R, Chunk.empty[Byte]).handleErrorWith(e => {
+                  errorHandler(e)
+                })
+              )(ch => { ch.close() *> rings.release(ring) })
+              .start
+          )
+          .handleErrorWith(errorHandler(_) *> ch.close() *> rings.release(ring))
+      } yield ()
+
+      _ <- loop.iterateUntil(_ => shutdownFlag)
+
+      _ <- IO(serverSocket.close())
+      _ <- rings.closeIoURings
+      _ <- Logger[IO].info("graceful server shutdown")
+
+    } yield (ExitCode.Success)
+
+  }
+
+  def run5(
+      nrings: Int,
+      e: ExecutorService,
+      R: HttpRoute,
+      maxThreadNum: Int,
+      maxStreams: Int,
+      keepAliveMs: Int
+  ): IO[ExitCode] = {
+    for {
+      _ <- Logger[IO].error("HTTP/2 TLS service: QuartzH2 async mode (netio/linux iouring)")
+      _ <- Logger[IO].info(s"Concurrency level(max threads): $maxThreadNum, max streams per conection: $maxStreams")
+      _ <- Logger[IO].info(s"h2 idle timeout: $keepAliveMs Ms")
+
+      conId <- Ref[IO].of(0L)
+
+      rings <- IoUringTbl(this, nrings)
+
+      serverSocket <- IO(new IoUringServerSocket(HOST, PORT))
+
+      _ <- Logger[IO].info(s"Listens: ${serverSocket.ipAddress()}:${serverSocket.port().toString()}")
+
+      acceptURing <- IO(new IoUring(4096))
+
+      loop = for {
+        a <- IOURingChannel.accept(acceptURing, serverSocket)
+        (ring_srv, socket) = a
+        _ <- Logger[IO].info(s"Connect from remote peer: ${socket.ipAddress()}")
+
+        ring <- rings.get
+
+        _ <- conId.update(_ + 1)
+
+        ch <- IO(IOURingChannel(ring, socket, keepAliveMs))
+
+        f1 <- IO(TLSChannel(sslCtx.get, ch))
+          .flatMap(c => c.ssl_init_h2().map((c, _)))
+          .flatMap(ch =>
+            IO(ch)
+              .bracket(ch =>
+                doConnect(ch._1, conId, maxStreams, keepAliveMs, R, ch._2).handleErrorWith(e => {
+                  errorHandler(e)
+                })
+              )(ch => { ch._1.close() *> rings.release(ring) })
+              .start
+          )
+          .handleErrorWith(e => errorHandler(e) *> ch.close() *> rings.release(ring))
+      } yield ()
+
+      _ <- loop.iterateUntil(_ => shutdownFlag)
+
+      _ <- IO(serverSocket.close())
+      _ <- rings.closeIoURings
+      _ <- Logger[IO].info("graceful server shutdown")
+
+    } yield (ExitCode.Success)
+
   }
 
 }

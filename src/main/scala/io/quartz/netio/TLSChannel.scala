@@ -101,7 +101,7 @@ object TLSChannel {
 
 }
 
-class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
+class TLSChannel(val ctx: SSLContext, rch: IOChannel) extends IOChannel {
 
   var f_SSL: SSLEngine = new SSLEngine(ctx.createSSLEngine())
   val TLS_PACKET_SZ = f_SSL.engine.getSession().getPacketBufferSize()
@@ -113,7 +113,9 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   private[this] val sni_hosts = new ListBuffer[String]()
 
   // prealoc carryover buffer, position getting saved between calls
-  private[this] val IN_J_BUFFER = java.nio.ByteBuffer.allocate(TLS_PACKET_SZ * MULTIPLER)
+  private[this] val IN_J_BUFFER = java.nio.ByteBuffer.allocateDirect(TLS_PACKET_SZ * MULTIPLER)
+
+  def put(bb: ByteBuffer): IO[Unit] = ???
 
   override def sniServerNames(): Option[Array[String]] = {
     if( sni_hosts.size == 0 ) None
@@ -128,9 +130,9 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     val result = for {
       sequential_unwrap_flag <- Ref[IO].of(false)
 
-      in_buf <- IO(ByteBuffer.allocate(TLS_PACKET_SZ))
-      out_buf <- IO(ByteBuffer.allocate(TLS_PACKET_SZ))
-      empty <- IO(ByteBuffer.allocate(0))
+      in_buf <- IO(ByteBuffer.allocateDirect(TLS_PACKET_SZ))
+      out_buf <- IO(ByteBuffer.allocateDirect(TLS_PACKET_SZ))
+      empty <- IO(ByteBuffer.allocateDirect(0))
 
       _ <- f_SSL.wrap(empty, out_buf) *> IO(out_buf.flip) *> rch.write(out_buf)
       _ <- IO(out_buf.clear)
@@ -254,9 +256,9 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     val result = for {
       sequential_unwrap_flag <- Ref[IO].of(false)
 
-      in_buf <- IO(ByteBuffer.allocate(TLS_PACKET_SZ))
-      out_buf <- IO(ByteBuffer.allocate(TLS_PACKET_SZ))
-      empty <- IO(ByteBuffer.allocate(0))
+      in_buf <- IO(ByteBuffer.allocateDirect(TLS_PACKET_SZ))
+      out_buf <- IO(ByteBuffer.allocateDirect(TLS_PACKET_SZ))
+      empty <- IO(ByteBuffer.allocateDirect(0))
 
       nbw <- rch
         .readBuffer(in_buf, TLSChannel.READ_HANDSHAKE_TIMEOUT_MS)
@@ -350,13 +352,18 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
     result
   }
 
+
+  //testing with light close
+  final def close(): IO[Unit] = rch.close()
+
+
   // close with TLS close_notify
-  final def close(): IO[Unit] = {
+  final def closeNotify(): IO[Unit] = {
     val result = for {
       _ <- IO(f_SSL.engine.getSession().invalidate())
       _ <- f_SSL.closeOutbound()
-      empty <- IO(ByteBuffer.allocate(0))
-      out <- IO(ByteBuffer.allocate(TLS_PACKET_SZ))
+      empty <- IO(ByteBuffer.allocateDirect(0))
+      out <- IO(ByteBuffer.allocateDirect(TLS_PACKET_SZ))
       loop = f_SSL.wrap(empty, out) *> f_SSL.isOutboundDone()
       _ <- loop.iterateUntil((status: Boolean) => status)
       _ <- IO(out.flip)
@@ -463,7 +470,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
   def write(in: ByteBuffer): IO[Int] = {
 
     val res = for {
-      out <- IO(ByteBuffer.allocate(if (in.limit() > TLS_PACKET_SZ) in.limit() * 3 else TLS_PACKET_SZ * 3))
+      out <- IO(ByteBuffer.allocateDirect(if (in.limit() > TLS_PACKET_SZ) in.limit() * 3 else TLS_PACKET_SZ * 3))
 
       loop = for {
         res <- f_SSL.wrap(in, out)
@@ -484,7 +491,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
   def write(chunk: Chunk[Byte]): IO[Int] = write(chunk.toByteBuffer)
 
-  private[netio] def readBuffer(out: ByteBuffer, timeoutMs: Int): IO[Int] = {
+  def readBuffer(out: ByteBuffer, timeoutMs: Int): IO[Int] = {
     val result = for {
       nb <- rch.readBuffer(IN_J_BUFFER, timeoutMs)
       _ <-
@@ -518,7 +525,7 @@ class TLSChannel(val ctx: SSLContext, rch: TCPChannel) extends IOChannel {
 
   def read(timeoutMs: Int): IO[Chunk[Byte]] = {
     for {
-      bb <- IO(ByteBuffer.allocate(MULTIPLER * APP_PACKET_SZ))
+      bb <- IO(ByteBuffer.allocateDirect(MULTIPLER * APP_PACKET_SZ))
       n <- readBuffer(bb, timeoutMs)
       chunk <- IO(Chunk.byteBuffer(bb))
     } yield (chunk)

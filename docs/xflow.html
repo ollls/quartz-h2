@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quartz H2 - Flow Control</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        pre {
+            background-color: #f7fafc;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', monospace;
+        }
+        .menu-item:hover {
+            background-color: #f7fafc;
+        }
+        .active-menu-item {
+            background-color: #ebf5ff;
+            border-left: 3px solid #3182ce;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Left Sidebar -->
+    <div class="flex h-screen overflow-hidden">
+        <div id="sidebar-container" class="w-64 bg-white shadow-md flex-shrink-0 overflow-auto">
+            <!-- Navigation will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto p-8">
+            <div class="max-w-4xl mx-auto">
+                <h1 class="text-3xl font-bold text-blue-600 mb-6 pb-2 border-b border-gray-200">HTTP/2 Flow Control and Cats Effect Integration</h1>
+                
+                <!-- Introduction -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Reactive Flow Control: The Quartz-H2 Advantage</h2>
+                    
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 implements a cutting-edge reactive flow control system that seamlessly integrates with the fs2 streaming ecosystem. This implementation goes beyond the standard HTTP/2 flow control requirements to deliver exceptional performance, stability, and resource efficiency.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">Inbound Traffic: Intelligent Reactive Backpressure</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        The inbound data flow in Quartz-H2 is regulated by a sophisticated backpressure mechanism that adapts to application processing capabilities in real-time:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li><strong>Application-Aware Flow Control</strong>: Unlike conventional implementations, our system monitors actual data consumption rates through the fs2 streaming pipeline.</li>
+                        <li><strong>Adaptive Backpressure</strong>: When application processing slows down, the system automatically throttles incoming data by delaying WINDOW_UPDATE frames, preventing buffer bloat and memory pressure.</li>
+                        <li><strong>Precise Resource Management</strong>: The dual-counter approach (<code>bytesOfPendingInboundData</code> and <code>inboundWindow</code>) creates a feedback loop that ensures optimal resource utilization even under variable load conditions.</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">Outbound Traffic: Responsive Transmission Control</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        The outbound data flow is equally well-regulated, ensuring efficient data delivery without overwhelming receivers:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li><strong>Credit-Based Transmission</strong>: The system precisely tracks available transmission windows and suspends data transmission when credits are exhausted.</li>
+                        <li><strong>Non-Blocking Wait Mechanism</strong>: When window limits are reached, transmissions elegantly pause using cats-effect's concurrency primitives, without blocking system resources.</li>
+                        <li><strong>Immediate Reactivity</strong>: When client WINDOW_UPDATE frames arrive, transmission resumes instantly, maintaining maximum throughput while respecting flow control constraints.</li>
+                    </ul>
+                </section>
+
+                <!-- Beyond Traditional Implementations -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Beyond Traditional HTTP/2 Implementations</h2>
+                    
+                    <p class="text-gray-700 mb-4">
+                        While most HTTP/2 implementations merely satisfy the specification requirements, Quartz-H2 takes flow control to the next level:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li><strong>End-to-End Backpressure</strong>: Unlike traditional implementations that only manage protocol-level flow control, Quartz-H2 creates a complete backpressure chain from the network socket all the way to your application logic.</li>
+                        <li><strong>Threshold-Based Window Updates</strong>: Instead of naively updating windows after consuming any data, our implementation uses sophisticated thresholds (70%/30%) to minimize protocol overhead while maximizing throughput.</li>
+                        <li><strong>Dual-Level Monitoring</strong>: By tracking both consumed data and available window size, Quartz-H2 makes more intelligent decisions about when to send WINDOW_UPDATE frames compared to implementations that track only one metric.</li>
+                        <li><strong>Automatic Resource Management</strong>: While other implementations require manual window management, Quartz-H2 automatically handles window updates based on actual consumption patterns.</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">Seamless Integration with fs2 Streaming</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 offers unparalleled ease of integration with your fs2-based applications:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li><strong>Direct Stream Consumption</strong>: Data from HTTP/2 frames is automatically converted into fs2 streams, ready for immediate consumption in your application.</li>
+                        <li><strong>Transparent Flow Control</strong>: The connection between data consumption and flow control is handled automatically - just process your streams naturally and the system takes care of the rest.</li>
+                        <li><strong>Functional Composition</strong>: Leverage the full power of fs2's combinators to transform, filter, and process your HTTP/2 data without worrying about low-level flow control details.</li>
+                        <li><strong>Resource Safety</strong>: The tight integration with cats-effect ensures that resources are properly managed even in the face of cancellations or errors.</li>
+                    </ul>
+                </section>
+
+                <!-- HTTP/2 Flow Control Fundamentals -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">HTTP/2 Flow Control Fundamentals</h2>
+                    
+                    <p class="text-gray-700 mb-4">
+                        HTTP/2 flow control is a mechanism that prevents senders from overwhelming receivers with data. It operates at two levels:
+                    </p>
+
+                    <ol class="list-decimal pl-6 mb-6 space-y-2 text-gray-700">
+                        <li><strong>Connection-level flow control</strong>: Applies to the entire connection</li>
+                        <li><strong>Stream-level flow control</strong>: Applies to individual streams</li>
+                    </ol>
+
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 implements both levels with a sophisticated reactive approach that ensures optimal performance.
+                    </p>
+                </section>
+
+                <!-- Implementation Details -->
+                <section class="mb-8">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Implementation Details</h2>
+                    
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">1. Reference Counters</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 uses several reference counters to track window sizes and data consumption:
+                    </p>
+
+                    <div class="bg-gray-50 p-4 rounded-md mb-6">
+                        <pre><code class="language-scala">// Connection level
+globalTransmitWindow: Ref[IO, Long]
+globalBytesOfPendingInboundData: Ref[IO, Long]
+globalInboundWindow: Ref[IO, Long]
+
+// Stream level (in Http2StreamCommon)
+bytesOfPendingInboundData: Ref[IO, Long]
+inboundWindow: Ref[IO, Long]
+transmitWindow: Ref[IO, Long]</code></pre>
+                    </div>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">2. Synchronization Queues</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 uses specialized queues to coordinate flow control operations in a non-blocking, reactive manner:
+                    </p>
+
+                    <div class="bg-gray-50 p-4 rounded-md mb-6">
+                        <pre><code class="language-scala">// Flow control synchronization queues
+xFlowSync <- Queue.unbounded[IO, Boolean]   // Flow control sync queue
+updSyncQ <- Queue.dropping[IO, Boolean](1)    // Window update queue</code></pre>
+                    </div>
+
+                    <p class="text-gray-700 mb-4">
+                        The <code>xFlowSync</code> queue is used to signal when data transmission can proceed, while the <code>updSyncQ</code> queue coordinates window updates to prevent excessive WINDOW_UPDATE frames.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">3. Window Update Mechanism</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        The <code>windowsUpdate</code> method is the core of the flow control implementation:
+                    </p>
+
+                    <div class="bg-gray-50 p-4 rounded-md mb-6">
+                        <pre><code class="language-scala">private[this] def windowsUpdate(
+    c: Http2ConnectionCommon,
+    streamId: Int,
+    received: Ref[IO, Long],
+    window: Ref[IO, Long],
+    len: Int
+) =
+  for {
+    bytes_received <- received.getAndUpdate(_ - len)
+    bytes_available <- window.getAndUpdate(_ - len)
+    send_update <- IO(
+      bytes_received < c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3
+    )
+    upd = c.INITIAL_WINDOW_SIZE - bytes_available.toInt
+    _ <- (c.sendFrame(Frames.mkWindowUpdateFrame(streamId, upd)) *> window
+      .update(_ + upd) *> Logger[IO].debug(s"Send UPDATE_WINDOW $upd streamId= $streamId")).whenA(send_update)
+  } yield (send_update)</code></pre>
+                    </div>
+
+                    <p class="text-gray-700 mb-4">
+                        This method implements a sophisticated threshold-based approach to window updates:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li>It decrements both the <code>received</code> counter (tracking consumed data) and the <code>window</code> counter (tracking available window)</li>
+                        <li>It sends a window update only when specific thresholds are met (70% of data consumed and less than 30% window available)</li>
+                        <li>The update size is calculated to restore the window to its initial size</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">4. Integration with fs2 Streams</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        The integration with fs2 streams is elegant and efficient:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li>Data frames are processed through the <code>dataEvalEffectProducer</code> method</li>
+                        <li>This method creates an fs2 <code>Stream</code> via <code>makeDataStream</code></li>
+                        <li>As the application consumes the stream, flow control counters are automatically updated</li>
+                        <li>Window updates are sent based on consumption patterns, creating a natural backpressure mechanism</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">5. Cancellation Mechanism</h3>
+                    
+                    <p class="text-gray-700 mb-4">
+                        Quartz-H2 implements a sophisticated cancellation mechanism using a double <code>offer(false)</code> pattern:
+                    </p>
+
+                    <div class="bg-gray-50 p-4 rounded-md mb-6">
+                        <pre><code class="language-scala">// In dropStreams()
+_ <- streams.traverse(s0 => s0.outXFlowSync.offer(false) *> s0.outXFlowSync.offer(false))</code></pre>
+                    </div>
+
+                    <p class="text-gray-700 mb-4">
+                        This pattern ensures proper cleanup of resources when streams are terminated or when the connection is shut down:
+                    </p>
+
+                    <ul class="list-disc pl-6 mb-6 space-y-2 text-gray-700">
+                        <li>The first <code>offer(false)</code> unblocks transmissions waiting to send remaining data</li>
+                        <li>The second <code>offer(false)</code> unblocks transmissions waiting for window credit</li>
+                        <li>When a <code>false</code> value is received, it raises a <code>QH2InterruptException</code> to properly terminate the operation</li>
+                    </ul>
+                </section>
+                
+                <div class="space-y-12">
+                    <!-- Introduction -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Reactive Flow Control: The ZIO Advantage</h2>
+                        <p class="text-gray-700 mb-4">
+                            ZIO Quartz H2 implements a cutting-edge reactive flow control system that seamlessly integrates with the ZIO streaming ecosystem. 
+                            This implementation goes beyond the standard HTTP/2 flow control requirements to deliver exceptional performance, stability, and resource efficiency.
+                        </p>
+                    </section>
+
+                    <!-- Flow Control Windows -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Flow Control Windows</h2>
+                        <p class="text-gray-700 mb-4">
+                            The server maintains several types of flow control windows, implemented as <code>Ref[Long]</code> values, which are atomic references that can be safely updated in a concurrent environment:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ul class="list-disc pl-6 space-y-2 text-gray-700">
+                                <li><strong>Global Transmit Window</strong>: Controls the total amount of data that can be sent across all streams in a connection.</li>
+                                <li><strong>Stream Transmit Window</strong>: Controls the amount of data that can be sent on a specific stream.</li>
+                                <li><strong>Global Inbound Window</strong>: Controls the total amount of data that can be received across all streams in a connection.</li>
+                                <li><strong>Stream Inbound Window</strong>: Controls the amount of data that can be received on a specific stream.</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <!-- ZIO Queues in Flow Control -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">ZIO Queues in Flow Control</h2>
+                        <p class="text-gray-700 mb-4">
+                            ZIO Queues play a central role in the flow control mechanism of ZIO Quartz H2. They provide a thread-safe way to handle data packets and control the flow of information between different parts of the system.
+                        </p>
+
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Key Queue Usage</h3>
+                            <ul class="list-disc pl-6 space-y-4 text-gray-700">
+                                <li>
+                                    <strong>inDataQ</strong>: Each HTTP/2 stream has an <code>inDataQ</code> queue that holds incoming data frames. When data is received, it's placed in this queue:
+                                    <pre><code class="scala">_ <- c.inDataQ.offer(bb)</code></pre>
+                                    This queue acts as a buffer between the network layer and the application, allowing for asynchronous processing of data.
+                                </li>
+                                <li>
+                                    <strong>outXFlowSync</strong>: This queue is used to synchronize data transmission with window availability. When the transmit window is exhausted, the sender waits on this queue until a window update is received:
+                                    <pre><code class="scala">b <- stream.outXFlowSync.take
+_ <- ZIO.when(b == false)(ZIO.fail(new java.lang.InterruptedException()))
+_ <- txWindow_Transmit(stream, bb, data_len)</code></pre>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Queue-Based Backpressure</h3>
+                            <p class="text-gray-700 mb-4">
+                                ZIO Queues provide natural backpressure capabilities. When a queue becomes full, any attempt to offer more elements will be suspended until space becomes available. This creates an automatic backpressure mechanism that propagates through the entire system.
+                            </p>
+                            <p class="text-gray-700 mb-4">
+                                In ZIO Quartz H2, this backpressure is integrated with the HTTP/2 flow control windows to create a complete end-to-end backpressure chain from the network socket to the application logic.
+                            </p>
+                        </div>
+                    </section>
+
+                    <!-- ZIO Streams and Flow Control -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">ZIO Streams and Flow Control</h2>
+                        <p class="text-gray-700 mb-4">
+                            ZIO Streams are used extensively in ZIO Quartz H2 to process data in a functional and composable way. The flow control mechanism is tightly integrated with these streams.
+                        </p>
+
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Packet Stream Processing</h3>
+                            <p class="text-gray-700 mb-4">
+                                The <code>makePacketStream</code> method creates a ZStream that reads from the IOChannel and transforms raw bytes into HTTP/2 packets:
+                            </p>
+                            <pre><code class="scala">def makePacketStream(ch: IOChannel, keepAliveMs: Int, leftOver: Chunk[Byte]): ZStream[Any, Throwable, Chunk[Byte]]</code></pre>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                This stream is then processed using the <code>foreach</code> method to handle each packet:
+                            </p>
+                            <pre><code class="scala">Http2Connection
+  .makePacketStream(ch, HTTP2_KEEP_ALIVE_MS, leftOver)
+  .foreach(packet => { packet_handler(httpReq11, packet) })</code></pre>
+                        </div>
+
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <h3 class="text-xl font-medium text-blue-600 mb-3">Functional Transformation with ZPipeline</h3>
+                            <p class="text-gray-700 mb-4">
+                                The <code>packetStreamPipe</code> is a ZPipeline that transforms a stream of bytes into a stream of HTTP/2 frames:
+                            </p>
+                            <pre><code class="scala">def packetStreamPipe: ZPipeline[Any, Exception, Byte, Chunk[Byte]]</code></pre>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                This pipeline is a functional description of the transformation from raw bytes to HTTP/2 packets, not just a data container. It allows for composition with other transformations in a clean, functional way.
+                            </p>
+                        </div>
+                    </section>
+
+                    <!-- Inbound Flow Control -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Inbound Flow Control</h2>
+                        <p class="text-gray-700 mb-4">
+                            When data frames are received, the server:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li>Updates the pending inbound data counters using <code>incrementGlobalPendingInboundData</code> and <code>bytesOfPendingInboundData.update</code>.</li>
+                                <li>Places the data in the stream's data queue (<code>inDataQ.offer</code>).</li>
+                                <li>As the application consumes data, the server decrements the pending inbound data counters.</li>
+                                <li>When certain thresholds are reached, the server sends WINDOW_UPDATE frames to increase the flow control windows.</li>
+                            </ol>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                The decision to send WINDOW_UPDATE frames is based on the following conditions:
+                            </p>
+                            <pre><code class="scala">send_update <- ZIO.succeed(
+  bytes_received < c.INITIAL_WINDOW_SIZE * 0.7 && bytes_available < c.INITIAL_WINDOW_SIZE * 0.3
+)</code></pre>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                This ensures that WINDOW_UPDATE frames are sent when the available window is less than 30% of the initial window size and the received bytes are less than 70% of the initial window size, optimizing network usage.
+                            </p>
+                        </div>
+                    </section>
+
+                    <!-- Outbound Flow Control -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Outbound Flow Control</h2>
+                        <p class="text-gray-700 mb-4">
+                            When sending data frames, the server:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li>Checks the available credit in both the global and stream transmit windows.</li>
+                                <li>If sufficient credit is available, it sends the data frame and decrements the windows.</li>
+                                <li>If insufficient credit is available, it waits for WINDOW_UPDATE frames from the peer before sending.</li>
+                            </ol>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                The <code>txWindow_Transmit</code> method handles this logic, ensuring that data is only sent when sufficient window space is available:
+                            </p>
+                            <pre><code class="scala">for {
+  tx_g <- globalTransmitWindow.get
+  tx_l <- stream.transmitWindow.get
+  bytesCredit <- ZIO.succeed(Math.min(tx_g, tx_l))
+  
+  _ <-
+    if (bytesCredit > 0)
+      // Send data and update windows
+    else 
+      // Wait for window update
+} yield (bytesCredit)</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Window Update Mechanism -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Window Update Mechanism</h2>
+                        <p class="text-gray-700 mb-4">
+                            The server processes WINDOW_UPDATE frames from peers through the <code>updateWindow</code> method, which:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li>Validates that the increment is not zero.</li>
+                                <li>Updates the appropriate window (global or stream-specific).</li>
+                                <li>Checks that the window does not exceed the maximum allowed value (2^31-1).</li>
+                                <li>Signals waiting senders that they can resume transmission.</li>
+                            </ol>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                For stream-specific updates:
+                            </p>
+                            <pre><code class="scala">private[this] def updateWindowStream(streamId: Int, inc: Int) = {
+  streamTbl.get(streamId) match {
+    case None         => ZIO.logDebug(s"Update window, streamId=$streamId invalid or closed already")
+    case Some(stream) => updateAndCheck(streamId, stream, inc)
+  }
+}</code></pre>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                For global updates, the server updates all stream windows as well:
+                            </p>
+                            <pre><code class="scala">if (streamId == 0)
+  updateAndCheckGlobalTx(streamId, inc) *>
+    ZIO.foreach(streamTbl.values.toSeq)(stream => updateAndCheck(streamId, stream, inc)).unit
+else 
+  updateWindowStream(streamId, inc)</code></pre>
+                        </div>
+                    </section>
+
+                    <!-- Adaptive Flow Control -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Adaptive Flow Control</h2>
+                        <p class="text-gray-700 mb-4">
+                            The ZIO Quartz H2 server implements adaptive flow control that responds to application processing rates. This is achieved through:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li><strong>Threshold-Based Window Updates</strong>: The server sends WINDOW_UPDATE frames based on consumption thresholds rather than fixed intervals.</li>
+                                <li><strong>Queue-Based Backpressure</strong>: The <code>outXFlowSync</code> queue is used to synchronize data transmission with window availability.</li>
+                                <li><strong>Dynamic Window Sizing</strong>: The server adjusts window sizes based on consumption rates, ensuring efficient use of resources.</li>
+                            </ol>
+                        </div>
+                    </section>
+
+                    <!-- End-to-End Backpressure -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">End-to-End Backpressure</h2>
+                        <p class="text-gray-700 mb-4">
+                            The server provides end-to-end backpressure from the network socket to the application logic:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li><strong>Network to Server</strong>: Flow control windows limit the amount of data the peer can send.</li>
+                                <li><strong>Server to Application</strong>: Data queues with ZIO's built-in backpressure mechanisms control the flow of data to the application.</li>
+                                <li><strong>Application to Server</strong>: As the application processes data, it signals the server to update flow control windows.</li>
+                                <li><strong>Server to Network</strong>: The server sends WINDOW_UPDATE frames based on application consumption rates.</li>
+                            </ol>
+                            <p class="text-gray-700 mt-4 mb-4">
+                                This complete chain ensures that all components of the system operate within their capacity, preventing resource exhaustion and optimizing performance.
+                            </p>
+                        </div>
+                    </section>
+
+                    <!-- Resource Management -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Resource Management</h2>
+                        <p class="text-gray-700 mb-4">
+                            The flow control implementation is tightly integrated with ZIO's resource management:
+                        </p>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                                <li><strong>Memory Efficiency</strong>: By limiting the amount of pending data, the server prevents memory exhaustion.</li>
+                                <li><strong>CPU Efficiency</strong>: The server processes data at a rate that matches the application's capacity.</li>
+                                <li><strong>Connection Efficiency</strong>: By optimizing window updates, the server minimizes the number of control frames sent.</li>
+                            </ol>
+                        </div>
+                    </section>
+
+                    <!-- Conclusion -->
+                    <section>
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Conclusion</h2>
+                        <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+                            <p class="text-gray-700 mb-4">
+                                The ZIO Quartz H2 server's flow control implementation provides a robust, adaptive mechanism for managing data flow in HTTP/2 connections. By integrating with ZIO's concurrency primitives and resource management, it ensures efficient operation even under high load conditions.
+                            </p>
+                            <p class="text-gray-700 mb-4">
+                                The use of ZIO Queues and ZStreams creates a functional, composable system that is both powerful and easy to reason about. This approach allows for precise control over data flow while maintaining the benefits of functional programming.
+                            </p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="js/navigation.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+    </script>
+</body>
+</html>

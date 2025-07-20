@@ -1,0 +1,5 @@
+timeout fix for multiple connections when at least one connection is active non expired.
+remove uneccessary allocateDirects, test plain text connections.
+eTags for HttpRanged requests. double check Safari HLS overhead, to make sure basic range requets are correct.
+HLS protocol assesment with FFmpeg
+Parameters for network bandwidth ( multipacket delay) - max 2 ms - min 0 ns.  ( route2, multipack)
