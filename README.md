@@ -1,3 +1,13 @@
+# Asynchronous Java NIO http/2 TLS packet streaming server/client.
+
+TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(120K TPS on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons.
+
+https://ollls.github.io/quartz-h2/index.html
+
+```
+"io.github.ollls" %% "tapir-quartz-h2" % "0.7"
+```
+
 https://ollls.github.io/quartz-h2/index.html
 
 [![Generic badge](https://img.shields.io/badge/quartz--h2-v0.9.0-blue)](https://repo1.maven.org/maven2/io/github/ollls/quartz-h2_3/0.9.0/)
