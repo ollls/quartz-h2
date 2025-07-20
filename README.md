@@ -6,7 +6,8 @@
 TLS encryption implemented as scala CATS effects with ALPN h2 tag. Direct native translation of fs2 stream chunks into http2 packets, where http Request's data and http Response's data mapped directy to fs2 streams. Tested and optimized to produce highest possible TPS.(120K TPS on MacBook with h2load tool, see details below). Single java.util.concurrent.ForkJoinPool for JAVA NIO Socket Groups and for evalOn() with CATS Effects. Http/2 weights and dependency are not implemented, for performance reasons.
 
 ## Documentation
-https://ollls.github.io/quartz-h2/index.html
+https://ollls.github.io/quartz-h2/index.html<br>
+https://github.com/ollls/json-template-qh2
 
 ## 0.8.5 README
 https://github.com/ollls/quartz-h2/blob/v0.8.5/README.md
