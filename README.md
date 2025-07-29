@@ -61,6 +61,24 @@ req/s           :    2353.88     3028.57     2928.14      194.00    85.48%
 
 ```
 
+IOURING with 4 rings on (AMD Ryzen 9 9950X) 
+( different dynamic more connections without degradation, on big multi-core it's important to have number of IOURING rings > 2 ) 
+```
+h2load -D10 -c140 -m20 -t1 https://localhost:8443/test
+
+finished in 10.02s, 172321.00 req/s, 1.64MB/s
+requests: 1723210 total, 1726010 started, 1723210 done, 1723210 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 1723210 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 16.44MB (17239660) total, 1.64MB (1723210) headers (space savings 90.00%), 0B (0) data
+                     min         max         mean         sd        +/- sd
+time for request:       51us     89.03ms     14.92ms     10.84ms    82.75%
+time for connect:     7.56ms       1.52s    635.12ms    436.57ms    59.29%
+time to 1st byte:     9.16ms       1.53s    642.55ms    440.41ms    58.57%
+req/s           :    1056.13     1560.53     1228.97      128.21    67.14%
+
+```
+
+
 ### How to run h2spec:
 
 Start server with "sbt IO/run" 
