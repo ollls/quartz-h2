@@ -44,7 +44,7 @@ ThisBuild / scmInfo := Some(
 Runtime / unmanagedClasspath += baseDirectory.value / "src" / "main" / "resources"
 
 lazy val root = (project in file("."))
-  .dependsOn(IOURING_LIB)
+  //.dependsOn(IOURING_LIB) - uncomment to rebuild iouring layer, remove - "iouring-quartz-h2" % "0.9-RC3
   .settings(
     organization := "io.github.ollls",
     name := "quartz-h2",
@@ -58,8 +58,8 @@ lazy val root = (project in file("."))
     libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.12",
     libraryDependencies += "org.typelevel" %% "cats-effect-testing-minitest" % "1.5.0" % Test,
     libraryDependencies += "org.eclipse.collections" % "eclipse-collections-api" % "11.1.0",
-    libraryDependencies += "org.eclipse.collections" % "eclipse-collections" % "11.1.0"
-    // libraryDependencies += "sh.blake.niouring" % "nio_uring" % "0.1.4"
+    libraryDependencies += "org.eclipse.collections" % "eclipse-collections" % "11.1.0",
+    libraryDependencies += "io.github.ollls" %% "iouring-quartz-h2" % "0.9-RC3",
   )
 
 lazy val RIO = (project in file("examples/RIO"))
